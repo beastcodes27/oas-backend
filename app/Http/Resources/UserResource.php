@@ -20,6 +20,7 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'phone' => $this->phone,
             'is_admin' => $this->is_admin,
+            'is_admissions' => $this->is_admissions,
             'created_at' => $this->created_at?->toISOString(),
         ];
     }

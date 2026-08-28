@@ -160,12 +160,12 @@ class ApplicationTest extends TestCase
             ->assertStatus(404);
     }
 
-    public function test_non_admin_cannot_access_admin_endpoints(): void
+    public function test_non_admin_cannot_access_staff_endpoints(): void
     {
         $user = User::factory()->create();
 
         $this->actingAs($user, 'sanctum')
-            ->getJson('/api/v1/admin/applications')
+            ->getJson('/api/v1/staff/applications')
             ->assertStatus(403);
     }
 
@@ -175,7 +175,7 @@ class ApplicationTest extends TestCase
         Application::factory()->count(3)->create(['school_id' => $this->school->id]);
 
         $this->actingAs($admin, 'sanctum')
-            ->getJson('/api/v1/admin/applications')
+            ->getJson('/api/v1/staff/applications')
             ->assertOk()
             ->assertJsonCount(3, 'data');
     }
@@ -189,7 +189,7 @@ class ApplicationTest extends TestCase
         ]);
 
         $response = $this->actingAs($admin, 'sanctum')
-            ->patchJson('/api/v1/admin/applications/'.$application->id.'/status', [
+            ->patchJson('/api/v1/staff/applications/'.$application->id.'/status', [
                 'status' => 'selected',
                 'notes' => 'Admitted to Form 1',
             ]);

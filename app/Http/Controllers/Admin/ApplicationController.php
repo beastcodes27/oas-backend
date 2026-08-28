@@ -4,50 +4,15 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\ApplicationStatus;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\UpdateApplicationStatusRequest;
 use App\Http\Requests\UpdateWindowRequest;
-use App\Http\Resources\ApplicationResource;
 use App\Http\Resources\SchoolResource;
 use App\Models\Application;
 use App\Models\School;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class ApplicationController extends Controller
 {
-    /**
-     * List all applications with optional filters.
-     */
-    public function index(): AnonymousResourceCollection
-    {
-        $applications = Application::query()
-            ->with(['student', 'school'])
-            ->when(request('status'), fn ($query, $status) => $query->where('status', $status))
-            ->when(request('entry_level'), fn ($query, $level) => $query->where('entry_level', $level))
-            ->when(request('reference'), fn ($query, $reference) => $query->where('reference', 'like', '%'.$reference.'%'))
-            ->latest('submitted_at')
-            ->paginate((int) request('per_page', 25));
-
-        return ApplicationResource::collection($applications);
-    }
-
-    /**
-     * Update an application's status.
-     */
-    public function updateStatus(UpdateApplicationStatusRequest $request, Application $application): ApplicationResource
-    {
-        $status = ApplicationStatus::from($request->status);
-
-        $application->update([
-            'status' => $status,
-            'decision_notes' => $request->validated('notes') ?? $application->decision_notes,
-            'decided_at' => $status->isFinal() ? now() : $application->decided_at,
-        ]);
-
-        $application->load(['student.guardian', 'school']);
-
-        return new ApplicationResource($application);
-    }
-
     /**
      * Open or close the application window for the school.
      */
@@ -58,5 +23,41 @@ class ApplicationController extends Controller
         $school->update($request->validated());
 
         return new SchoolResource($school->fresh());
+    }
+
+    /**
+     * Publish the draft selection decisions to all students at once.
+     *
+     * Approved drafts become "selected" and declined drafts become "rejected".
+     * This is the single moment students see their results.
+     */
+    public function publishSelections(): JsonResponse
+    {
+        $school = School::query()->firstOrFail();
+
+        if ($school->selections_published_at !== null) {
+            return response()->json([
+                'message' => 'Selections have already been published.',
+            ], 409);
+        }
+
+        $updated = DB::transaction(function () use ($school): int {
+            $approved = Application::query()
+                ->where('status', ApplicationStatus::Approved->value)
+                ->update(['status' => ApplicationStatus::Selected, 'decided_at' => now()]);
+
+            $declined = Application::query()
+                ->where('status', ApplicationStatus::Declined->value)
+                ->update(['status' => ApplicationStatus::Rejected, 'decided_at' => now()]);
+
+            $school->update(['selections_published_at' => now()]);
+
+            return $approved + $declined;
+        });
+
+        return response()->json([
+            'message' => "Selections published to {$updated} applicants.",
+            'selections_published_at' => $school->fresh()->selections_published_at?->toISOString(),
+        ]);
     }
 }

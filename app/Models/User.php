@@ -12,7 +12,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'phone', 'is_admin'])]
+#[Fillable(['name', 'email', 'password', 'phone', 'is_admin', 'is_admissions'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -30,7 +30,13 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'is_admissions' => 'boolean',
         ];
+    }
+
+    public function isStaff(): bool
+    {
+        return $this->is_admin || $this->is_admissions;
     }
 
     public function students(): HasMany

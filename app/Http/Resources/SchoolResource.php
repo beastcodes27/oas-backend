@@ -33,6 +33,7 @@ class SchoolResource extends JsonResource
             'applications_open' => $this->applications_open,
             'window_opens_at' => $this->window_opens_at?->toISOString(),
             'window_closes_at' => $this->window_closes_at?->toISOString(),
+            'selections_published_at' => $this->selections_published_at?->toISOString(),
         ];
     }
 }

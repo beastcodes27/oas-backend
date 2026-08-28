@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\ApplicationController as AdminApplicationControll
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\SchoolController;
+use App\Http\Controllers\Staff\ApplicationController as StaffApplicationController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -35,10 +36,15 @@ Route::prefix('v1')->group(function () {
         Route::post('applications', [ApplicationController::class, 'store'])->name('applications.store');
     });
 
+    // Staff endpoints — administrators and admission officers
+    Route::prefix('staff')->middleware(['auth:sanctum', 'staff', 'throttle:api'])->group(function () {
+        Route::get('applications', [StaffApplicationController::class, 'index'])->name('staff.applications.index');
+        Route::patch('applications/{application}/status', [StaffApplicationController::class, 'updateStatus'])->name('staff.applications.status');
+    });
+
     // Administrator endpoints
     Route::prefix('admin')->middleware(['auth:sanctum', 'admin', 'throttle:api'])->group(function () {
-        Route::get('applications', [AdminApplicationController::class, 'index'])->name('admin.applications.index');
-        Route::patch('applications/{application}/status', [AdminApplicationController::class, 'updateStatus'])->name('admin.applications.status');
+        Route::patch('selections/publish', [AdminApplicationController::class, 'publishSelections'])->name('admin.selections.publish');
         Route::patch('settings/window', [AdminApplicationController::class, 'updateWindow'])->name('admin.settings.window');
     });
 });

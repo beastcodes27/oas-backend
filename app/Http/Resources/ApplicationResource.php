@@ -12,6 +12,8 @@ class ApplicationResource extends JsonResource
         ApplicationStatus::Pending->value => 0,
         ApplicationStatus::Verified->value => 1,
         ApplicationStatus::Reviewing->value => 2,
+        ApplicationStatus::Approved->value => 2,
+        ApplicationStatus::Declined->value => 2,
         ApplicationStatus::Selected->value => 3,
         ApplicationStatus::Rejected->value => 3,
     ];

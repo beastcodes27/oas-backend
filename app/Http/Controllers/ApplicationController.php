@@ -86,6 +86,10 @@ class ApplicationController extends Controller
             ], 404);
         }
 
+        $visibleStatus = $application->status->isDraftDecision()
+            ? ApplicationStatus::Reviewing
+            : $application->status;
+
         return response()->json([
             'data' => [
                 'reference' => $application->reference,
@@ -93,8 +97,8 @@ class ApplicationController extends Controller
                 'student_name' => $application->student?->full_name,
                 'school' => $application->school?->name,
                 'status' => [
-                    'value' => $application->status->value,
-                    'label' => $application->status->label(),
+                    'value' => $visibleStatus->value,
+                    'label' => $visibleStatus->label(),
                 ],
                 'submitted_at' => $application->submitted_at?->toISOString(),
                 'decided_at' => $application->decided_at?->toISOString(),
