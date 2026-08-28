@@ -30,6 +30,9 @@ class SchoolResource extends JsonResource
             'programs' => $this->programs,
             'contact' => $this->contact,
             'window' => $this->window,
+            'applications_open' => $this->applications_open,
+            'window_opens_at' => $this->window_opens_at?->toISOString(),
+            'window_closes_at' => $this->window_closes_at?->toISOString(),
         ];
     }
 }

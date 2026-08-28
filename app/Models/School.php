@@ -26,6 +26,9 @@ class School extends Model
             'streams' => 'array',
             'programs' => 'array',
             'contact' => 'array',
+            'applications_open' => 'boolean',
+            'window_opens_at' => 'datetime',
+            'window_closes_at' => 'datetime',
         ];
     }
 

@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\ApplicationStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateApplicationStatusRequest;
+use App\Http\Requests\UpdateWindowRequest;
 use App\Http\Resources\ApplicationResource;
+use App\Http\Resources\SchoolResource;
 use App\Models\Application;
+use App\Models\School;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ApplicationController extends Controller
@@ -43,5 +46,17 @@ class ApplicationController extends Controller
         $application->load(['student.guardian', 'school']);
 
         return new ApplicationResource($application);
+    }
+
+    /**
+     * Open or close the application window for the school.
+     */
+    public function updateWindow(UpdateWindowRequest $request): SchoolResource
+    {
+        $school = School::query()->firstOrFail();
+
+        $school->update($request->validated());
+
+        return new SchoolResource($school->fresh());
     }
 }

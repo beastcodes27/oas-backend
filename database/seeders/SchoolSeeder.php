@@ -35,6 +35,9 @@ class SchoolSeeder extends Seeder
                     'address' => 'P.O. Box 123, Moshi, Kilimanjaro, Tanzania',
                 ],
                 'window' => '1 March – 30 April 2026',
+                'applications_open' => true,
+                'window_opens_at' => now()->subDays(30),
+                'window_closes_at' => now()->addDays(60),
             ],
         );
     }

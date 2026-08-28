@@ -39,5 +39,6 @@ Route::prefix('v1')->group(function () {
     Route::prefix('admin')->middleware(['auth:sanctum', 'admin', 'throttle:api'])->group(function () {
         Route::get('applications', [AdminApplicationController::class, 'index'])->name('admin.applications.index');
         Route::patch('applications/{application}/status', [AdminApplicationController::class, 'updateStatus'])->name('admin.applications.status');
+        Route::patch('settings/window', [AdminApplicationController::class, 'updateWindow'])->name('admin.settings.window');
     });
 });

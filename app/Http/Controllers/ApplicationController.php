@@ -8,6 +8,7 @@ use App\Http\Resources\ApplicationResource;
 use App\Models\Application;
 use App\Models\School;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +24,17 @@ class ApplicationController extends Controller
         $data = $request->validated();
         $user = $request->user();
 
-        $application = DB::transaction(function () use ($data, $user): Application {
+        $school = School::query()->find($data['school_id'] ?? $this->defaultSchoolId());
+
+        if ($school !== null && ! $school->applications_open) {
+            throw new HttpResponseException(
+                response()->json([
+                    'message' => 'Applications are currently closed. The next application window has not opened yet.',
+                ], 403),
+            );
+        }
+
+        $application = DB::transaction(function () use ($data, $user, $school): Application {
             $student = $user->students()->create($data['student']);
 
             /** @var HasOne $guardianRelation */
@@ -32,7 +43,7 @@ class ApplicationController extends Controller
 
             return $student->applications()->create([
                 'user_id' => $user->id,
-                'school_id' => $data['school_id'] ?? $this->defaultSchoolId(),
+                'school_id' => $school?->id ?? $this->defaultSchoolId(),
                 'entry_level' => $data['entry_level'],
                 'reference' => $this->generateReference(),
                 'status' => ApplicationStatus::Pending,
