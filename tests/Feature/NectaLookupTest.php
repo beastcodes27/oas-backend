@@ -35,6 +35,7 @@ class NectaLookupTest extends TestCase
             ->assertJsonStructure([
                 'data' => [
                     'candidate_name',
+                    'school_name',
                     'exam_type',
                     'exam_label',
                     'reg_number',
@@ -47,7 +48,8 @@ class NectaLookupTest extends TestCase
                 ],
             ])
             ->assertJsonPath('data.reg_number', 'PS11001001')
-            ->assertJsonPath('data.year', 2023);
+            ->assertJsonPath('data.year', 2023)
+            ->assertJsonPath('data.school_name', fn (string $value) => $value !== '');
 
         $first = $response->json('data');
         $second = $this->actingAs($user, 'sanctum')

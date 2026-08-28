@@ -20,6 +20,19 @@ class NectaController extends Controller
         'csee' => ['Civics', 'History', 'Geography', 'Kiswahili', 'English', 'Mathematics', 'Biology', 'Physics', 'Chemistry'],
     ];
 
+    private const SCHOOLS = [
+        'Umoja Primary School',
+        'Mwanga Primary School',
+        'Kilimanjaro Primary School',
+        'St. Joseph Academy',
+        'Moshi Primary School',
+        'Arusha Primary School',
+        'Zanzibar Primary School',
+        'Upendo Primary School',
+        'Korongoni Primary School',
+        'Njiro Primary School',
+    ];
+
     /**
      * Fetch a candidate's NECTA result by registration number and year.
      *
@@ -63,6 +76,7 @@ class NectaController extends Controller
 
         return [
             'candidate_name' => $this->candidateName($seed),
+            'school_name' => self::SCHOOLS[abs($seed >> 3) % count(self::SCHOOLS)],
             'exam_type' => $examType,
             'exam_label' => self::EXAM_LABELS[$examType],
             'reg_number' => $regNumber,
