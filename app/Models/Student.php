@@ -25,6 +25,8 @@ class Student extends Model
     {
         return [
             'birth_date' => 'date',
+            'exam_confirmed' => 'boolean',
+            'exam_result' => 'array',
         ];
     }
 

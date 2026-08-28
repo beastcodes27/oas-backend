@@ -40,9 +40,16 @@ class ApplicationTest extends TestCase
                 'phone' => '0755 100 100',
                 'email' => 'amina.student@example.com',
                 'previous_school' => 'Umoja Primary School',
-                'previous_class' => 'Standard Seven',
-                'previous_marks' => '195',
                 'disability' => '',
+                'exam_type' => 'psle',
+                'exam_reg_number' => 'PS11001001',
+                'exam_year' => 2023,
+                'exam_confirmed' => true,
+                'exam_result' => [
+                    'candidate_name' => 'Amina Khalid',
+                    'division' => 'II',
+                    'points' => 15,
+                ],
             ],
             'guardian' => [
                 'name' => 'Khalid Hassan',

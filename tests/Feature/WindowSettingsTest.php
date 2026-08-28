@@ -97,6 +97,10 @@ class WindowSettingsTest extends TestCase
                     'district' => 'Moshi',
                     'ward' => 'Korongoni',
                     'phone' => '0755 100 100',
+                    'exam_type' => 'psle',
+                    'exam_reg_number' => 'PS11001001',
+                    'exam_year' => 2023,
+                    'exam_confirmed' => true,
                 ],
                 'guardian' => [
                     'name' => 'Khalid Hassan',

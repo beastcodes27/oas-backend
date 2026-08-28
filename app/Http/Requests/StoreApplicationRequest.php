@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreApplicationRequest extends FormRequest
 {
@@ -22,7 +23,7 @@ class StoreApplicationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'entry_level' => ['required', 'string', 'in:Form 1,Form 5'],
+            'entry_level' => ['required', 'string', 'in:Form 1,Form 3,Form 5'],
             'school_id' => ['nullable', 'integer', 'exists:schools,id'],
 
             'student.first_name' => ['required', 'string', 'max:255'],
@@ -37,9 +38,13 @@ class StoreApplicationRequest extends FormRequest
             'student.phone' => ['required', 'string', 'max:30'],
             'student.email' => ['nullable', 'string', 'email', 'max:255'],
             'student.previous_school' => ['nullable', 'string', 'max:255'],
-            'student.previous_class' => ['nullable', 'string', 'max:60'],
-            'student.previous_marks' => ['nullable', 'string', 'max:60'],
             'student.disability' => ['nullable', 'string', 'max:100'],
+
+            'student.exam_type' => ['required', Rule::in(['psle', 'ftna', 'csee'])],
+            'student.exam_reg_number' => ['required', 'string', 'max:40'],
+            'student.exam_year' => ['required', 'integer', 'digits:4', 'between:2000,'.date('Y')],
+            'student.exam_confirmed' => ['required', 'accepted'],
+            'student.exam_result' => ['nullable', 'array'],
 
             'guardian.name' => ['required', 'string', 'max:255'],
             'guardian.relation' => ['required', 'string', 'max:60'],

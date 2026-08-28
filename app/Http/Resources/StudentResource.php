@@ -32,6 +32,11 @@ class StudentResource extends JsonResource
             'previous_class' => $this->previous_class,
             'previous_marks' => $this->previous_marks,
             'disability' => $this->disability,
+            'exam_type' => $this->exam_type,
+            'exam_reg_number' => $this->exam_reg_number,
+            'exam_year' => $this->exam_year,
+            'exam_confirmed' => $this->exam_confirmed,
+            'exam_result' => $this->exam_result,
         ];
     }
 }
