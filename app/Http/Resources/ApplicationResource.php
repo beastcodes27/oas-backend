@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\ApplicationStatus;
+use App\Enums\VerificationStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -26,6 +27,7 @@ class ApplicationResource extends JsonResource
     public function toArray(Request $request): array
     {
         $status = $this->status;
+        $verification = $this->verification_status ?? VerificationStatus::Pending;
 
         return [
             'id' => $this->id,
@@ -38,6 +40,14 @@ class ApplicationResource extends JsonResource
             'submitted_at' => $this->submitted_at?->toISOString(),
             'decided_at' => $this->decided_at?->toISOString(),
             'decision_notes' => $this->decision_notes,
+            'verification_status' => [
+                'value' => $verification->value,
+                'label' => $verification->label(),
+            ],
+            'necta_division' => $this->necta_division,
+            'necta_matched_name' => $this->necta_matched_name,
+            'necta_verified_at' => $this->necta_verified_at?->toISOString(),
+            'verification_error' => $this->verification_error,
             'student' => new StudentResource($this->whenLoaded('student')),
             'guardian' => new GuardianResource($this->student?->guardian),
             'school' => new SchoolResource($this->whenLoaded('school')),

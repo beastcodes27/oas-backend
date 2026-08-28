@@ -42,5 +42,10 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('auth', function ($request) {
             return Limit::perMinute(5)->by($request->ip());
         });
+
+        RateLimiter::for('necta', function ($job) {
+            // Protects NECTA's servers from bursts of queued verification jobs.
+            return Limit::perMinute(10)->by('necta-scraper');
+        });
     }
 }

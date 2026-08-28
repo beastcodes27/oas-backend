@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Enums\ApplicationStatus;
+use App\Jobs\VerifyNectaResult;
 use App\Models\Application;
 use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class ApplicationTest extends TestCase
@@ -20,6 +22,10 @@ class ApplicationTest extends TestCase
         parent::setUp();
 
         $this->school = School::factory()->create();
+
+        // The verification job is dispatched on submission; keep it off the
+        // network in these tests (it is covered by its own test suite).
+        Queue::fake();
     }
 
     private function payload(array $overrides = []): array
@@ -96,6 +102,8 @@ class ApplicationTest extends TestCase
             'entry_level' => 'Form 1',
             'status' => ApplicationStatus::Pending->value,
         ]);
+
+        Queue::assertPushed(VerifyNectaResult::class);
     }
 
     public function test_application_requires_valid_student_details(): void

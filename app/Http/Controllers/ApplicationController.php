@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ApplicationStatus;
+use App\Enums\VerificationStatus;
 use App\Http\Requests\StoreApplicationRequest;
 use App\Http\Resources\ApplicationResource;
+use App\Jobs\VerifyNectaResult;
 use App\Models\Application;
 use App\Models\School;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -47,11 +49,15 @@ class ApplicationController extends Controller
                 'entry_level' => $data['entry_level'],
                 'reference' => $this->generateReference(),
                 'status' => ApplicationStatus::Pending,
+                'verification_status' => VerificationStatus::Pending,
                 'submitted_at' => now(),
             ]);
         });
 
         $application->load(['student.guardian', 'school']);
+
+        // Verify the applicant's identity against NECTA in the background.
+        VerifyNectaResult::dispatch($application);
 
         return new ApplicationResource($application);
     }

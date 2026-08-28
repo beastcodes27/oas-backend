@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ApplicationStatus;
+use App\Enums\VerificationStatus;
 use Database\Factories\ApplicationFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -25,7 +26,9 @@ class Application extends Model
         return [
             'submitted_at' => 'datetime',
             'decided_at' => 'datetime',
+            'necta_verified_at' => 'datetime',
             'status' => ApplicationStatus::class,
+            'verification_status' => VerificationStatus::class,
         ];
     }
 

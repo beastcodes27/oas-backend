@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\ApplicationStatus;
+use App\Enums\VerificationStatus;
 use App\Models\Application;
 use App\Models\School;
 use App\Models\Student;
@@ -28,6 +29,7 @@ class ApplicationFactory extends Factory
             'school_id' => School::factory(),
             'entry_level' => fake()->randomElement(['Form 1', 'Form 5']),
             'status' => ApplicationStatus::Pending,
+            'verification_status' => VerificationStatus::Pending,
             'submitted_at' => now()->subDays(fake()->numberBetween(1, 30)),
         ];
     }

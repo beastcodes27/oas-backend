@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class NectaLookupTest extends TestCase
@@ -79,6 +80,8 @@ class NectaLookupTest extends TestCase
 
     public function test_application_accepts_form_3_entry_with_ftna(): void
     {
+        Queue::fake();
+
         $user = User::factory()->create();
         $school = School::factory()->create();
 
