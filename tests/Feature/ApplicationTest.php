@@ -106,6 +106,38 @@ class ApplicationTest extends TestCase
         Queue::assertPushed(VerifyNectaResult::class);
     }
 
+    public function test_owner_can_download_application_form_pdf(): void
+    {
+        $user = User::factory()->create();
+        $application = Application::factory()->create(['user_id' => $user->id, 'school_id' => $this->school->id]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->get('/api/v1/applications/'.$application->id.'/form');
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertSee('%PDF', false);
+    }
+
+    public function test_user_cannot_download_another_users_form(): void
+    {
+        $owner = User::factory()->create();
+        $other = User::factory()->create();
+        $application = Application::factory()->create(['user_id' => $owner->id]);
+
+        $this->actingAs($other, 'sanctum')
+            ->get('/api/v1/applications/'.$application->id.'/form')
+            ->assertStatus(403);
+    }
+
+    public function test_guest_cannot_download_an_application_form(): void
+    {
+        $application = Application::factory()->create(['user_id' => User::factory()->create()->id]);
+
+        $this->getJson('/api/v1/applications/'.$application->id.'/form')
+            ->assertStatus(401);
+    }
+
     public function test_application_requires_valid_student_details(): void
     {
         $user = User::factory()->create();

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\ApplicationStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateSchoolContentRequest;
 use App\Http\Requests\UpdateWindowRequest;
 use App\Http\Resources\SchoolResource;
 use App\Models\Application;
@@ -21,6 +22,24 @@ class ApplicationController extends Controller
         $school = School::query()->firstOrFail();
 
         $school->update($request->validated());
+
+        return new SchoolResource($school->fresh());
+    }
+
+    /**
+     * Update the public school content shown to visitors.
+     *
+     * This includes the A-Level combinations offered and the published
+     * result links (name + URL) displayed on the school page.
+     */
+    public function updateContent(UpdateSchoolContentRequest $request): SchoolResource
+    {
+        $school = School::query()->firstOrFail();
+
+        $school->update([
+            'combinations' => $request->validated('combinations') ?? [],
+            'result_links' => $request->validated('result_links') ?? [],
+        ]);
 
         return new SchoolResource($school->fresh());
     }

@@ -27,6 +27,8 @@ class SchoolResource extends JsonResource
             'capacity' => $this->capacity,
             'forms' => $this->forms,
             'streams' => $this->streams,
+            'combinations' => $this->combinations ?? [],
+            'result_links' => $this->result_links ?? [],
             'programs' => $this->programs,
             'contact' => $this->contact,
             'window' => $this->window,

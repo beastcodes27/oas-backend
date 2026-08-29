@@ -35,6 +35,7 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::get('applications', [ApplicationController::class, 'index'])->name('applications.index');
         Route::post('applications', [ApplicationController::class, 'store'])->name('applications.store');
+        Route::get('applications/{application}/form', [ApplicationController::class, 'form'])->name('applications.form');
         Route::post('necta/lookup', [NectaController::class, 'lookup'])->name('necta.lookup');
     });
 
@@ -48,5 +49,6 @@ Route::prefix('v1')->group(function () {
     Route::prefix('admin')->middleware(['auth:sanctum', 'admin', 'throttle:api'])->group(function () {
         Route::patch('selections/publish', [AdminApplicationController::class, 'publishSelections'])->name('admin.selections.publish');
         Route::patch('settings/window', [AdminApplicationController::class, 'updateWindow'])->name('admin.settings.window');
+        Route::patch('school/content', [AdminApplicationController::class, 'updateContent'])->name('admin.school.content');
     });
 });

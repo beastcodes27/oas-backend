@@ -24,6 +24,8 @@ class School extends Model
         return [
             'forms' => 'array',
             'streams' => 'array',
+            'combinations' => 'array',
+            'result_links' => 'array',
             'programs' => 'array',
             'contact' => 'array',
             'applications_open' => 'boolean',

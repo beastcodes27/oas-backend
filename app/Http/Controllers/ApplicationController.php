@@ -9,12 +9,14 @@ use App\Http\Resources\ApplicationResource;
 use App\Jobs\VerifyNectaResult;
 use App\Models\Application;
 use App\Models\School;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 class ApplicationController extends Controller
 {
@@ -60,6 +62,26 @@ class ApplicationController extends Controller
         VerifyNectaResult::dispatch($application);
 
         return new ApplicationResource($application);
+    }
+
+    /**
+     * Download a printable application form (PDF) for the authenticated user's
+     * application.
+     */
+    public function form(Application $application): Response
+    {
+        if ($application->user_id !== request()->user()->id) {
+            abort(403, 'You can only download your own application form.');
+        }
+
+        $application->load(['student.guardian', 'school']);
+
+        $pdf = Pdf::loadView(
+            'pdf.application-form',
+            ['application' => $application],
+        );
+
+        return $pdf->download('application-form-'.$application->reference.'.pdf');
     }
 
     /**
