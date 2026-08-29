@@ -84,9 +84,8 @@ class NectaVerificationService
         'psle' => [
             'host' => 'https://onlinesys.necta.go.tz/results',
             'dir' => 'psle',
-            'index_file' => 'psle.htm',
+            'file_prefix' => 'shl_ps', // PSLE school pages are shl_ps{centreschool}.htm
             'label' => 'Standard 7 (PSLE)',
-            'school_number_required' => true,
         ],
         'ftna' => [
             'host' => 'https://onlinesys.necta.go.tz/results',
@@ -203,11 +202,27 @@ class NectaVerificationService
     /**
      * Parse and validate an index number for the given exam type.
      *
+     * PSLE uses NECTA's full school number: "PS0101001-0001" (7-digit school,
+     * serial) optionally followed by "/year". CSEE/FTNA use
+     * "{prefix}{centre}/{serial}/{year}".
+     *
      * @return array{centre: string, serial: string, year: int}|null
      */
     private function parseIndex(string $indexNumber, string $examType): ?array
     {
         if (! isset(self::EXAMS[$examType])) {
+            return null;
+        }
+
+        if ($examType === 'psle') {
+            if (preg_match('/^PS(\d{7})-(\d{4})(?:\/(\d{4}))?$/i', $indexNumber, $match)) {
+                return [
+                    'centre' => $match[1],
+                    'serial' => $match[2],
+                    'year' => (int) ($match[3] ?? date('Y')),
+                ];
+            }
+
             return null;
         }
 
@@ -242,14 +257,6 @@ class NectaVerificationService
     private function fetchResult(string $examType, array $parsed): array
     {
         $exam = self::EXAMS[$examType];
-
-        if (($exam['school_number_required'] ?? false) === true) {
-            // The PSLE pages are keyed by a 7-digit school number
-            // (centre + 3-digit sub-school) that our index format lacks.
-            throw new NectaNotFoundException(
-                'PSLE lookup requires the full NECTA school number (e.g. PS0101001-0001).',
-            );
-        }
 
         $errors = [];
         $structureFailed = false;
@@ -311,7 +318,14 @@ class NectaVerificationService
      */
     private function fetchFromHost(string $examType, array $parsed): array
     {
-        $url = $this->resolveCentreUrl($examType, $parsed);
+        $exam = self::EXAMS[$examType];
+
+        // PSLE school pages are directly named (shl_ps{centreschool}.htm); the
+        // other exams resolve the centre's file from the year index because the
+        // S/P prefix varies per centre.
+        $url = isset($exam['file_prefix'])
+            ? $exam['host'].'/'.$parsed['year'].'/'.$exam['dir'].'/results/'.$exam['file_prefix'].$parsed['centre'].'.htm'
+            : $this->resolveCentreUrl($examType, $parsed);
 
         $response = Http::timeout(15)
             ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; OAS-Verifier/1.0)'])
@@ -325,7 +339,7 @@ class NectaVerificationService
             throw new NectaNotFoundException('Empty response from NECTA.');
         }
 
-        return $this->parseCandidateFromHtml($response->body(), $parsed['centre'], $parsed['serial']);
+        return $this->parseCandidateFromHtml($examType, $response->body(), $parsed['centre'], $parsed['serial']);
     }
 
     /**
@@ -403,7 +417,7 @@ class NectaVerificationService
                     continue;
                 }
 
-                return $this->parseCandidateFromHtml($response->body(), $parsed['centre'], $parsed['serial']);
+                return $this->parseCandidateFromHtml($examType, $response->body(), $parsed['centre'], $parsed['serial']);
             } catch (NectaScraperStructureException|NectaNotFoundException $e) {
                 // A parseable TETEA page is authoritative — if the serial is
                 // absent there, do not try the other prefix.
@@ -423,7 +437,7 @@ class NectaVerificationService
      *
      * @return array<string, mixed>
      */
-    private function parseCandidateFromHtml(string $html, string $centre, string $serial): array
+    private function parseCandidateFromHtml(string $examType, string $html, string $centre, string $serial): array
     {
         if (str_contains(strtolower($html), 'no results') || str_contains($html, 'hakuna matokeo')) {
             throw new NectaNotFoundException('Results page indicates no results available.');
@@ -433,12 +447,11 @@ class NectaVerificationService
             throw new NectaScraperStructureException('Results page contains no candidate table.');
         }
 
-        // Locate the candidate number, e.g. "S0231/0001" or "P0104/0002".
-        // NECTA emits candidate rows as bare <td> cells (no <tr>), so back up
-        // to the cell that contains the number, then collect the following
-        // cells which make up the row.
+        // Locate the candidate number. CSEE/FTNA use "centre/serial" (e.g.
+        // S0231/0001); PSLE uses "PS{centreschool}-serial" (e.g. PS0101001-0001).
+        $separator = $examType === 'psle' ? '\-' : '\/';
         $cnoPattern = '/\b[A-Za-z]{0,3}'.preg_quote($centre, '/')
-            .'\/'.preg_quote($serial, '/').'\b/i';
+            .$separator.preg_quote($serial, '/').'\b/i';
 
         if (! preg_match($cnoPattern, $html, $match, PREG_OFFSET_CAPTURE)) {
             throw new NectaNotFoundException("Candidate {$centre}/{$serial} not found on results page.");
@@ -466,21 +479,31 @@ class NectaVerificationService
             throw new NectaScraperStructureException('Candidate row does not match the requested index.');
         }
 
-        // Column layouts vary by exam:
-        //   CSEE:  [CNO, SEX, AGGT, DIV, DETAILED SUBJECTS]
-        //   FTNA:  [CNO, RegNo, SEX, AGGT, DIV, DETAILED SUBJECTS]
-        // Detect the layout by whether the second column is a sex (M/F).
-        $sexIndex = in_array(strtoupper($values[1] ?? ''), ['M', 'F'], true) ? 1 : 2;
+        if ($examType === 'psle') {
+            // PSLE rows: [CNO, RegNo, SEX, DETAILED SUBJECTS] — no division/points.
+            if (count($values) < 4) {
+                throw new NectaScraperStructureException('Candidate table row does not have the expected columns.');
+            }
 
-        if (count($values) < $sexIndex + 4) {
-            throw new NectaScraperStructureException('Candidate table row does not have the expected columns.');
+            $division = null;
+            $points = null;
+            $subjects = $this->parseSubjects($values[3] ?? '');
+        } else {
+            // Column layouts vary:
+            //   CSEE:  [CNO, SEX, AGGT, DIV, DETAILED SUBJECTS]
+            //   FTNA:  [CNO, RegNo, SEX, AGGT, DIV, DETAILED SUBJECTS]
+            $sexIndex = in_array(strtoupper($values[1] ?? ''), ['M', 'F'], true) ? 1 : 2;
+
+            if (count($values) < $sexIndex + 4) {
+                throw new NectaScraperStructureException('Candidate table row does not have the expected columns.');
+            }
+
+            $aggt = $values[$sexIndex + 1] ?? null;
+            $division = $values[$sexIndex + 2] ?? null;
+            $division = (is_string($division) && in_array(strtoupper($division), ['0', 'ABS'], true)) ? null : $division;
+            $points = (is_string($aggt) && is_numeric($aggt)) ? (int) $aggt : null;
+            $subjects = $this->parseSubjects($values[$sexIndex + 3] ?? '');
         }
-
-        $aggt = $values[$sexIndex + 1] ?? null;
-        $division = $values[$sexIndex + 2] ?? null;
-        $division = (is_string($division) && in_array(strtoupper($division), ['0', 'ABS'], true)) ? null : $division;
-        $points = (is_string($aggt) && is_numeric($aggt)) ? (int) $aggt : null;
-        $subjects = $this->parseSubjects($values[$sexIndex + 3] ?? '');
 
         if ($division === null && $points === null && $subjects === []) {
             throw new NectaScraperStructureException('Candidate row has no usable result data.');
@@ -488,7 +511,7 @@ class NectaVerificationService
 
         return [
             'candidate_name' => null, // NECTA does not publish names.
-            'school_name' => $this->parseSchoolName($html, $centre),
+            'school_name' => $this->parseSchoolName($examType, $html, $centre),
             'cno' => $values[0],
             'division' => $division,
             'points' => $points,
@@ -505,15 +528,25 @@ class NectaVerificationService
      * the centre number and is followed by "DIVISION", so the match is made on
      * the cleaned text and anchored on DIVISION (with an optional CENTRE).
      */
-    private function parseSchoolName(string $html, string $centre): ?string
+    private function parseSchoolName(string $examType, string $html, string $centre): ?string
     {
         $text = (string) preg_replace('/<script\b[^>]*>.*?<\/script>/is', ' ', $html);
         $text = (string) preg_replace('/<style\b[^>]*>.*?<\/style>/is', ' ', $text);
         $text = trim((string) preg_replace('/\s+/', ' ', strip_tags($text)));
 
-        $pattern = '/\b[A-Z]{1,2}'.preg_quote($centre, '/').'\s*-?\s*'
-            .'([A-Z][A-Z0-9&\'.\/()\s-]{2,80}?)'
-            .'\s+(?:CENTRE\s+)?DIVISION\b/i';
+        if ($examType === 'psle') {
+            // PSLE headers put the school name BEFORE the number:
+            // "RESULTS BANGATA PRIMARY SCHOOL - PS0101001 WALIOFANYA MTIHANI".
+            $pattern = '/RESULTS\s+(.+?)\s*-\s*PS'.preg_quote($centre, '/').'\b/is';
+        } else {
+            // Headers differ between sources, e.g. "S1318 NANDEMBO SECONDARY
+            // SCHOOL DIVISION PERFORMANCE SUMMARY" (TETEA) or "P0104 - KIBOBO
+            // SECONDARY SCHOOL CENTRE DIVISION" (NECTA). The school name always
+            // sits after the centre number and before "DIVISION".
+            $pattern = '/\b[A-Z]{1,2}'.preg_quote($centre, '/').'\s*-?\s*'
+                .'([A-Z][A-Z0-9&\'.\/()\s-]{2,80}?)'
+                .'\s+(?:CENTRE\s+)?DIVISION\b/i';
+        }
 
         if (! preg_match($pattern, $text, $match)) {
             return null;
@@ -527,7 +560,11 @@ class NectaVerificationService
     }
 
     /**
-     * Parse "SUBJECT - 'GRADE'" pairs from the detailed subjects cell.
+     * Parse "SUBJECT - GRADE" pairs from the detailed subjects cell.
+     *
+     * Handles both NECTA formats: space-separated with quotes
+     * ("CIV - 'C' HIST - 'D'") and comma-separated without quotes
+     * ("Kiswahili - C, English - D", as used on PSLE pages).
      *
      * @return array<int, array{name: string, grade: string}>
      */
@@ -535,8 +572,14 @@ class NectaVerificationService
     {
         $subjects = [];
 
-        if (preg_match_all("/([A-Z][A-Z0-9\/\&\.\-\s]*?)\s*-\s*'([A-Z])'/i", $text, $matches, PREG_SET_ORDER)) {
-            foreach ($matches as $match) {
+        foreach (preg_split('/\s*,\s*|\s{2,}/', $text) as $segment) {
+            $segment = trim($segment);
+
+            if ($segment === '') {
+                continue;
+            }
+
+            if (preg_match("/^(.*?)\s*-\s*'?([A-Z])'?$/i", $segment, $match)) {
                 $subjects[] = [
                     'name' => trim($match[1]),
                     'grade' => strtoupper($match[2]),

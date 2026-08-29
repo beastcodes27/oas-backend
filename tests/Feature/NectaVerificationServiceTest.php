@@ -66,15 +66,40 @@ class NectaVerificationServiceTest extends TestCase
         $this->assertSame('invalid_index', $result['error_type']);
     }
 
-    public function test_psle_lookup_reports_not_found_without_school_number(): void
+    public function test_psle_requires_the_full_school_number(): void
     {
-        // The application's PSLE format (PS0101/0023/2024) cannot resolve the
-        // 3-digit school sub-code NECTA uses, so it reports not-found clearly.
+        // The old PSLE format (PS0101/0023/2024) lacks NECTA's 7-digit school
+        // number and is therefore rejected as invalid.
         $result = $this->service()->verify('PS0101/0023/2024', null, 'psle');
 
         $this->assertFalse($result['verified']);
-        $this->assertSame('not_found', $result['error_type']);
-        $this->assertStringContainsString('school number', $result['error']);
+        $this->assertSame('invalid_index', $result['error_type']);
+    }
+
+    public function test_verifies_a_psle_candidate_with_the_school_number(): void
+    {
+        $psleHtml = '
+            <html>
+              <body>
+                <h3>PSLE 2024 EXAMINATION RESULTS BANGATA PRIMARY SCHOOL - PS0101001 WALIOFANYA MTIHANI</h3>
+                <table>
+                  <tr><td>PS0101001-0001</td><td>20181564229</td><td>M</td><td>Kiswahili - C, English - D, Science - C, Average Grade - C</td></tr>
+                </table>
+              </body>
+            </html>';
+
+        Http::fake([
+            'onlinesys.necta.go.tz/*' => Http::response($psleHtml, 200),
+        ]);
+
+        $result = $this->service()->verify('PS0101001-0001/2024', null, 'psle');
+
+        $this->assertTrue($result['verified']);
+        $this->assertSame('PS0101001-0001', $result['raw_result_data']['cno']);
+        $this->assertSame('Bangata Primary School', $result['raw_result_data']['school_name']);
+        $this->assertNull($result['division']);
+        $this->assertCount(4, $result['raw_result_data']['subjects']);
+        $this->assertSame(['name' => 'Kiswahili', 'grade' => 'C'], $result['raw_result_data']['subjects'][0]);
     }
 
     public function test_verifies_a_csee_candidate_whose_index_resolves(): void
