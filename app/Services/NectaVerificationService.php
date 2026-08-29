@@ -48,6 +48,24 @@ class NectaVerificationService
     private const CACHE_TTL_SECONDS = 86400; // 24 hours
 
     /**
+     * TETEA mirrors NECTA results at maktaba.tetea.org and keeps older years
+     * (e.g. CSEE 2021) that NECTA's own site no longer serves. It is used as a
+     * fallback source when the primary NECTA lookup fails.
+     */
+    private const TETEA_BASE = 'https://maktaba.tetea.org/exam-results';
+
+    /**
+     * TETEA centre-page naming per exam: directory "{EXAM}{year}" and the
+     * lowercase/uppercase letter prefix NECTA used for that exam's centres.
+     *
+     * @var array<string, array{dir: string, file_prefix: string}>
+     */
+    private const TETEA_EXAMS = [
+        'ftna' => ['dir' => 'FTNA', 'file_prefix' => 'S'],
+        'csee' => ['dir' => 'CSEE', 'file_prefix' => 's'],
+    ];
+
+    /**
      * Exam metadata for building the real NECTA results URLs.
      *
      * @var array<string, array{
@@ -210,7 +228,8 @@ class NectaVerificationService
     }
 
     /**
-     * Fetch and parse a candidate's result from NECTA.
+     * Fetch and parse a candidate's result, trying the primary NECTA source
+     * and then the TETEA mirror.
      *
      * @param  string  $examType  psle|ftna|csee
      * @param  array{centre: string, serial: string, year: int}  $parsed
@@ -228,6 +247,63 @@ class NectaVerificationService
             );
         }
 
+        $errors = [];
+        $structureFailed = false;
+        $networkFailed = false;
+
+        foreach ($this->resultSources($examType, $exam, $parsed) as $label => $source) {
+            try {
+                return $source();
+            } catch (NectaNotFoundException $e) {
+                $errors[] = $e->getMessage();
+            } catch (NectaScraperStructureException $e) {
+                Log::error('NECTA scraper structure changed — fix the scraper, do NOT treat as not-found.', [
+                    'source' => $label,
+                    'message' => $e->getMessage(),
+                ]);
+                $structureFailed = true;
+            } catch (NectaNetworkException|ConnectionException $e) {
+                Log::warning('NECTA lookup failed: network error', ['source' => $label, 'message' => $e->getMessage()]);
+                $networkFailed = true;
+            }
+        }
+
+        // Surface the most actionable failure: a scraper that no longer parses
+        // NECTA's markup is a code problem, a network failure is transient, and
+        // everything else simply means no published result.
+        if ($structureFailed) {
+            throw new NectaScraperStructureException('The NECTA results page structure has changed on all sources.');
+        }
+
+        if ($networkFailed) {
+            throw new NectaNetworkException('NECTA results are unreachable on all sources.');
+        }
+
+        throw new NectaNotFoundException(implode(' ', $errors));
+    }
+
+    /**
+     * Ordered list of result-fetching closures (primary first, then TETEA).
+     *
+     * @param  array{centre: string, serial: string, year: int}  $parsed
+     * @return array<string, \Closure>
+     */
+    private function resultSources(string $examType, array $exam, array $parsed): array
+    {
+        return [
+            'NECTA' => fn () => $this->fetchFromHost($exam, $parsed),
+            'TETEA' => fn () => $this->fetchFromTetea($examType, $parsed),
+        ];
+    }
+
+    /**
+     * Fetch a candidate page from NECTA's own results host.
+     *
+     * @param  array{centre: string, serial: string, year: int}  $parsed
+     * @return array<string, mixed>
+     */
+    private function fetchFromHost(array $exam, array $parsed): array
+    {
         $url = $exam['host'].'/'.$parsed['year'].'/'.$exam['dir'].'/results/'
             .$exam['file_prefix'].$parsed['centre'].'.htm';
 
@@ -241,6 +317,38 @@ class NectaVerificationService
 
         if ($response->body() === '') {
             throw new NectaNotFoundException('Empty response from NECTA.');
+        }
+
+        return $this->parseCandidateFromHtml($response->body(), $parsed['centre'], $parsed['serial']);
+    }
+
+    /**
+     * Fetch a candidate page from the TETEA mirror.
+     *
+     * @param  array{centre: string, serial: string, year: int}  $parsed
+     * @return array<string, mixed>
+     */
+    private function fetchFromTetea(string $examType, array $parsed): array
+    {
+        $config = self::TETEA_EXAMS[$examType] ?? null;
+
+        if ($config === null) {
+            throw new NectaNotFoundException('No TETEA mirror available for this exam.');
+        }
+
+        $url = self::TETEA_BASE.'/'.$config['dir'].$parsed['year'].'/'
+            .$config['file_prefix'].$parsed['centre'].'.htm';
+
+        $response = Http::timeout(15)
+            ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; OAS-Verifier/1.0)'])
+            ->get($url);
+
+        if ($response->failed()) {
+            throw new NectaNotFoundException("TETEA returned {$response->status()} for {$url}");
+        }
+
+        if ($response->body() === '') {
+            throw new NectaNotFoundException('Empty response from TETEA.');
         }
 
         return $this->parseCandidateFromHtml($response->body(), $parsed['centre'], $parsed['serial']);

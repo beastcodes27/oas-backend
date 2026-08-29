@@ -98,6 +98,7 @@ class NectaVerificationServiceTest extends TestCase
     {
         Http::fake([
             'onlinesys.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
+            'maktaba.tetea.org/*' => Http::response($this->resultHtml(), 200),
         ]);
 
         $result = $this->service()->verify('S0104/7777/2024', null, 'csee');
@@ -110,6 +111,7 @@ class NectaVerificationServiceTest extends TestCase
     {
         Http::fake([
             'onlinesys.necta.go.tz/*' => Http::response('Not Found', 404),
+            'maktaba.tetea.org/*' => Http::response('Not Found', 404),
         ]);
 
         $result = $this->service()->verify('S0104/0002/2024', null, 'csee');
@@ -118,10 +120,31 @@ class NectaVerificationServiceTest extends TestCase
         $this->assertSame('not_found', $result['error_type']);
     }
 
+    public function test_falls_back_to_tetea_when_necta_has_no_result(): void
+    {
+        // Older years (e.g. CSEE 2021) are no longer served by NECTA's own
+        // site, but the TETEA mirror still publishes them.
+        Http::fake([
+            'onlinesys.necta.go.tz/*' => Http::response('Not Found', 404),
+            'maktaba.tetea.org/*' => Http::response($this->resultHtml(), 200),
+        ]);
+
+        $result = $this->service()->verify('S0104/0002/2021', null, 'csee');
+
+        $this->assertTrue($result['verified']);
+        $this->assertSame('III', $result['division']);
+        $this->assertSame(17, $result['points']);
+        $this->assertSame('P0104/0002', $result['raw_result_data']['cno']);
+
+        // Both sources were consulted.
+        Http::assertSentCount(2);
+    }
+
     public function test_returns_network_error_when_necta_unreachable(): void
     {
         Http::fake([
             'onlinesys.necta.go.tz/*' => fn () => throw new ConnectionException('Connection refused'),
+            'maktaba.tetea.org/*' => fn () => throw new ConnectionException('Connection refused'),
         ]);
 
         $result = $this->service()->verify('S0104/0002/2024', null, 'csee');
@@ -134,6 +157,7 @@ class NectaVerificationServiceTest extends TestCase
     {
         Http::fake([
             'onlinesys.necta.go.tz/*' => Http::response('<html><div>totally different</div></html>', 200),
+            'maktaba.tetea.org/*' => Http::response('<html><div>totally different</div></html>', 200),
         ]);
 
         $result = $this->service()->verify('S0104/0002/2024', null, 'csee');

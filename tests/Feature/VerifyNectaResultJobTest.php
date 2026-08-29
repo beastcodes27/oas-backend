@@ -81,6 +81,7 @@ class VerifyNectaResultJobTest extends TestCase
     {
         Http::fake([
             'onlinesys.necta.go.tz/*' => Http::response($this->centreHtml('9999'), 200),
+            'maktaba.tetea.org/*' => Http::response('Not Found', 404),
         ]);
 
         $application = $this->applicationWithStudent();
