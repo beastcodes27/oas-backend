@@ -11,7 +11,7 @@ class UpdateWindowRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->isStaff() === true;
+        return $this->user()?->is_admin === true;
     }
 
     /**

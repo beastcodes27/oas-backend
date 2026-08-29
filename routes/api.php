@@ -45,12 +45,12 @@ Route::prefix('v1')->group(function () {
     Route::prefix('staff')->middleware(['auth:sanctum', 'staff', 'throttle:api'])->group(function () {
         Route::get('applications', [StaffApplicationController::class, 'index'])->name('staff.applications.index');
         Route::patch('applications/{application}/status', [StaffApplicationController::class, 'updateStatus'])->name('staff.applications.status');
-        Route::patch('settings/window', [AdminApplicationController::class, 'updateWindow'])->name('staff.settings.window');
     });
 
     // Administrator endpoints
     Route::prefix('admin')->middleware(['auth:sanctum', 'admin', 'throttle:api'])->group(function () {
         Route::patch('selections/publish', [AdminApplicationController::class, 'publishSelections'])->name('admin.selections.publish');
+        Route::patch('settings/window', [AdminApplicationController::class, 'updateWindow'])->name('admin.settings.window');
         Route::patch('school/content', [AdminApplicationController::class, 'updateContent'])->name('admin.school.content');
         Route::patch('school/contact', [AdminApplicationController::class, 'updateContact'])->name('admin.school.contact');
         Route::get('gallery', [App\Http\Controllers\Admin\GalleryController::class, 'index'])->name('admin.gallery.index');

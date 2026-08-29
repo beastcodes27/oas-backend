@@ -36,7 +36,7 @@ class WindowSettingsTest extends TestCase
         $school = School::factory()->create(['applications_open' => true]);
 
         $response = $this->actingAs($admin, 'sanctum')
-            ->patchJson('/api/v1/staff/settings/window', [
+            ->patchJson('/api/v1/admin/settings/window', [
                 'applications_open' => false,
                 'window_opens_at' => '2027-03-01 00:00:00',
                 'window_closes_at' => '2027-04-30 23:59:59',
@@ -56,14 +56,14 @@ class WindowSettingsTest extends TestCase
         $admin = User::factory()->create(['is_admin' => true]);
 
         $this->actingAs($admin, 'sanctum')
-            ->patchJson('/api/v1/staff/settings/window', [
+            ->patchJson('/api/v1/admin/settings/window', [
                 'applications_open' => 'not-a-bool',
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('applications_open');
 
         $this->actingAs($admin, 'sanctum')
-            ->patchJson('/api/v1/staff/settings/window', [
+            ->patchJson('/api/v1/admin/settings/window', [
                 'applications_open' => true,
                 'window_opens_at' => '2027-05-01',
                 'window_closes_at' => '2027-04-01',
@@ -77,20 +77,20 @@ class WindowSettingsTest extends TestCase
         $user = User::factory()->create();
 
         $this->actingAs($user, 'sanctum')
-            ->patchJson('/api/v1/staff/settings/window', ['applications_open' => false])
+            ->patchJson('/api/v1/admin/settings/window', ['applications_open' => false])
             ->assertStatus(403);
     }
 
-    public function test_admission_officer_can_change_the_window(): void
+    public function test_admission_officer_cannot_change_the_window(): void
     {
         $officer = User::factory()->create(['is_admissions' => true]);
         $school = School::factory()->create(['applications_open' => true]);
 
         $this->actingAs($officer, 'sanctum')
-            ->patchJson('/api/v1/staff/settings/window', ['applications_open' => false])
-            ->assertOk();
+            ->patchJson('/api/v1/admin/settings/window', ['applications_open' => false])
+            ->assertStatus(403);
 
-        $this->assertDatabaseHas('schools', ['id' => $school->id, 'applications_open' => false]);
+        $this->assertDatabaseHas('schools', ['id' => $school->id, 'applications_open' => true]);
     }
 
     public function test_application_submission_is_rejected_when_window_is_closed(): void
