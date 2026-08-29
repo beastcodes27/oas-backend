@@ -429,16 +429,29 @@ class NectaVerificationService
     /**
      * Extract the centre's school name from the page header.
      *
-     * Headers look like "P0104 - BWIRU BOYS SECONDARY SCHOOL CENTRE DIVISION".
+     * Headers differ between sources, e.g. "S1318 NANDEMBO SECONDARY SCHOOL
+     * DIVISION PERFORMANCE SUMMARY" (TETEA) or "P0104 - KIBOBO SECONDARY
+     * SCHOOL CENTRE DIVISION" (NECTA). The school name always sits right after
+     * the centre number and is followed by "DIVISION", so the match is made on
+     * the cleaned text and anchored on DIVISION (with an optional CENTRE).
      */
     private function parseSchoolName(string $html, string $centre): ?string
     {
-        if (! preg_match('/\b(?:[A-Z]{1,2})?'.preg_quote($centre, '/').'\s*-?\s*(.+?)\s+CENTRE\b/is', $html, $match)) {
+        $text = (string) preg_replace('/<script\b[^>]*>.*?<\/script>/is', ' ', $html);
+        $text = (string) preg_replace('/<style\b[^>]*>.*?<\/style>/is', ' ', $text);
+        $text = trim((string) preg_replace('/\s+/', ' ', strip_tags($text)));
+
+        $pattern = '/\b[A-Z]{1,2}'.preg_quote($centre, '/').'\s*-?\s*'
+            .'([A-Z][A-Z0-9&\'.\/()\s-]{2,80}?)'
+            .'\s+(?:CENTRE\s+)?DIVISION\b/i';
+
+        if (! preg_match($pattern, $text, $match)) {
             return null;
         }
 
-        $name = trim(preg_replace('/\s+/', ' ', $match[1]));
-        $name = ltrim($name, '- ');
+        $name = trim($match[1]);
+        $name = trim((string) preg_replace('/\s+/', ' ', $name));
+        $name = (string) preg_replace('/\bCENTRE\s*$/i', '', $name);
 
         return $name === '' ? null : mb_convert_case($name, MB_CASE_TITLE, 'UTF-8');
     }

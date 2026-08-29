@@ -68,6 +68,31 @@ class NectaVerificationServiceTest extends TestCase
         $this->assertNull($result['error']);
     }
 
+    public function test_parses_school_name_from_tetea_style_header(): void
+    {
+        // TETEA headers omit "CENTRE": "S1318 NANDEMBO SECONDARY SCHOOL DIVISION
+        // PERFORMANCE SUMMARY" — the school name must be parsed cleanly, not
+        // drag in the rest of the page.
+        Http::fake([
+            'onlinesys.necta.go.tz/*' => Http::response('Not Found', 404),
+            'maktaba.tetea.org/*' => Http::response('
+                <html><body>
+                <h3>CSEE 2021 EXAMINATION RESULTS S1318 NANDEMBO SECONDARY SCHOOL DIVISION PERFORMANCE SUMMARY</h3>
+                <table>
+                  <tr><td>S1318/0099</td><td>M</td><td>15</td><td>I</td><td>CIV - \'A\' HIST - \'B\' GEO - \'B\'</td></tr>
+                </table>
+                </body></html>', 200),
+        ]);
+
+        $result = $this->service()->verify('S1318/0099/2021', null, 'csee');
+
+        $this->assertTrue($result['verified']);
+        $this->assertSame('I', $result['division']);
+        $this->assertSame(15, $result['points']);
+        $this->assertSame('Nandembo Secondary School', $result['raw_result_data']['school_name']);
+        $this->assertStringNotContainsString('<', $result['raw_result_data']['school_name']);
+    }
+
     public function test_verification_is_prefix_agnostic(): void
     {
         Http::fake([
