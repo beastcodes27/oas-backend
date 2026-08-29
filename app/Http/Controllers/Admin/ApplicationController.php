@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\ApplicationStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateSchoolContactRequest;
 use App\Http\Requests\UpdateSchoolContentRequest;
 use App\Http\Requests\UpdateWindowRequest;
 use App\Http\Resources\SchoolResource;
@@ -39,6 +40,21 @@ class ApplicationController extends Controller
         $school->update([
             'combinations' => $request->validated('combinations') ?? [],
             'result_links' => $request->validated('result_links') ?? [],
+        ]);
+
+        return new SchoolResource($school->fresh());
+    }
+
+    /**
+     * Update the public contact details (phone, email, address) shown on the
+     * contact page.
+     */
+    public function updateContact(UpdateSchoolContactRequest $request): SchoolResource
+    {
+        $school = School::query()->firstOrFail();
+
+        $school->update([
+            'contact' => $request->validated('contact'),
         ]);
 
         return new SchoolResource($school->fresh());

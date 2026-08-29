@@ -50,5 +50,6 @@ Route::prefix('v1')->group(function () {
         Route::patch('selections/publish', [AdminApplicationController::class, 'publishSelections'])->name('admin.selections.publish');
         Route::patch('settings/window', [AdminApplicationController::class, 'updateWindow'])->name('admin.settings.window');
         Route::patch('school/content', [AdminApplicationController::class, 'updateContent'])->name('admin.school.content');
+        Route::patch('school/contact', [AdminApplicationController::class, 'updateContact'])->name('admin.school.contact');
     });
 });

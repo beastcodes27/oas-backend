@@ -93,4 +93,52 @@ class SchoolContentTest extends TestCase
             ->assertJsonPath('data.0.combinations', ['PCM', 'PCB'])
             ->assertJsonCount(1, 'data.0.result_links');
     }
+
+    public function test_admin_can_update_contact_details(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $school = School::factory()->create();
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/school/contact', [
+                'contact' => [
+                    'phone' => '+255 712 345 678',
+                    'email' => 'new@shuleyetu.ac.tz',
+                    'address' => 'P.O. Box 999, Moshi',
+                ],
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.contact.phone', '+255 712 345 678')
+            ->assertJsonPath('data.contact.email', 'new@shuleyetu.ac.tz');
+
+        $this->assertSame('new@shuleyetu.ac.tz', $school->fresh()->contact['email']);
+    }
+
+    public function test_contact_update_requires_valid_email(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/school/contact', [
+                'contact' => [
+                    'phone' => '+255 712 345 678',
+                    'email' => 'not-an-email',
+                    'address' => 'P.O. Box 999',
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('contact.email');
+    }
+
+    public function test_non_admin_cannot_update_contact_details(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user, 'sanctum')
+            ->patchJson('/api/v1/admin/school/contact', [
+                'contact' => ['phone' => 'x', 'email' => 'x@x.com', 'address' => 'x'],
+            ])
+            ->assertStatus(403);
+    }
 }
