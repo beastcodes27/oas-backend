@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\Necta\NectaNotFoundException;
+use App\Exceptions\Necta\NectaScraperStructureException;
+use App\Services\NectaVerificationService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -14,84 +18,48 @@ class NectaController extends Controller
         'csee' => 'Form Four (CSEE)',
     ];
 
-    private const SUBJECTS = [
-        'psle' => ['Kiswahili', 'English', 'Mathematics', 'Science', 'Social Studies', 'Civic & Moral Education'],
-        'ftna' => ['Civics', 'History', 'Geography', 'Kiswahili', 'English', 'Mathematics', 'Biology', 'Physics', 'Chemistry'],
-        'csee' => ['Civics', 'History', 'Geography', 'Kiswahili', 'English', 'Mathematics', 'Biology', 'Physics', 'Chemistry'],
-    ];
-
-    private const SCHOOLS = [
-        'Umoja Primary School',
-        'Mwanga Primary School',
-        'Kilimanjaro Primary School',
-        'St. Joseph Academy',
-        'Moshi Primary School',
-        'Arusha Primary School',
-        'Zanzibar Primary School',
-        'Upendo Primary School',
-        'Korongoni Primary School',
-        'Njiro Primary School',
-    ];
-
     /**
-     * Fetch a candidate's NECTA result by registration number and year.
+     * Fetch a candidate's published result from NECTA using their index number.
      *
-     * NOTE: No public NECTA API is available yet, so this endpoint returns a
-     * deterministic mock result. Swap the internals for a real integration
-     * without changing the response shape.
+     * The index number already encodes the examination year, e.g. PS0101/0023/2024.
      */
-    public function lookup(Request $request): JsonResponse
+    public function lookup(Request $request, NectaVerificationService $service): JsonResponse
     {
         $data = $request->validate([
             'exam_type' => ['required', Rule::in(array_keys(self::EXAM_LABELS))],
             'reg_number' => ['required', 'string', 'max:40'],
-            'year' => ['required', 'integer', 'digits:4', 'between:2000,'.date('Y')],
         ]);
 
-        $result = $this->mockResult($data['exam_type'], strtoupper($data['reg_number']), (int) $data['year']);
+        try {
+            $result = $service->fetchRaw($data['reg_number'], $data['exam_type']);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (NectaNotFoundException $e) {
+            return response()->json([
+                'message' => 'No result has been published for this index number and year yet.',
+            ], 404);
+        } catch (NectaScraperStructureException $e) {
+            return response()->json([
+                'message' => 'The NECTA results page could not be read. The school has been notified.',
+            ], 502);
+        } catch (ConnectionException) {
+            return response()->json([
+                'message' => 'NECTA results are unreachable right now. Please try again later.',
+            ], 502);
+        }
 
-        return response()->json(['data' => $result]);
-    }
-
-    /**
-     * Build a deterministic mock NECTA result from the registration details.
-     *
-     * @return array<string, mixed>
-     */
-    private function mockResult(string $examType, string $regNumber, int $year): array
-    {
-        $seed = crc32($regNumber.'|'.$year);
-        $divisions = ['I', 'II', 'III', 'IV'];
-        $division = $divisions[abs($seed) % 4];
-        $basePoints = ['I' => 4, 'II' => 12, 'III' => 19, 'IV' => 26];
-        $points = $basePoints[$division] + (abs($seed) % 4);
-
-        $grades = ['A', 'B', 'C', 'D', 'E', 'F'];
-        $subjects = array_map(function (string $subject, int $i) use ($seed, $grades) {
-            return [
-                'name' => $subject,
-                'grade' => $grades[(abs($seed >> $i) + $i) % count($grades)],
-            ];
-        }, self::SUBJECTS[$examType], array_keys(self::SUBJECTS[$examType]));
-
-        return [
-            'candidate_name' => $this->candidateName($seed),
-            'school_name' => self::SCHOOLS[abs($seed >> 3) % count(self::SCHOOLS)],
-            'exam_type' => $examType,
-            'exam_label' => self::EXAM_LABELS[$examType],
-            'reg_number' => $regNumber,
-            'year' => $year,
-            'division' => $division,
-            'points' => $points,
-            'subjects' => $subjects,
-        ];
-    }
-
-    private function candidateName(int $seed): string
-    {
-        $first = ['Amina', 'Baraka', 'Zawadi', 'Neema', 'Joseph', 'Grace', 'Emmanuel', 'Rehema', 'Daniel', 'Upendo'];
-        $last = ['Mushi', 'Khalid', 'Massawe', 'Shirima', 'Mwakyusa', 'Msaki', 'Kimaro', 'Laizer', 'Moshi', 'Komba'];
-
-        return $first[abs($seed) % count($first)].' '.$last[abs($seed / 7) % count($last)];
+        return response()->json([
+            'data' => [
+                'candidate_name' => $result['candidate_name'],
+                'school_name' => $result['school_name'],
+                'cno' => $result['cno'],
+                'exam_type' => $data['exam_type'],
+                'exam_label' => self::EXAM_LABELS[$data['exam_type']],
+                'reg_number' => $data['reg_number'],
+                'division' => $result['division'],
+                'points' => $result['points'],
+                'subjects' => $result['subjects'],
+            ],
+        ]);
     }
 }

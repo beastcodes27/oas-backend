@@ -2,8 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Exceptions\Necta\NectaNotFoundException;
-use App\Exceptions\Necta\NectaScraperStructureException;
 use App\Services\NectaVerificationService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
@@ -17,86 +15,104 @@ class NectaVerificationServiceTest extends TestCase
         return app(NectaVerificationService::class);
     }
 
-    private function resultHtml(string $serial = '0023'): string
+    /**
+     * A realistic NECTA CSEE centre results page (onlinesys.necta.go.tz).
+     */
+    private function resultHtml(string $serial = '0002'): string
     {
-        $row = $serial === '0023'
-            ? '<tr><td>0023</td><td>Amina Khalid</td><td>III</td><td>20</td></tr>'
-            : '<tr><td>'.$serial.'</td><td>Some Other</td><td>I</td><td>4</td></tr>';
-
         return '
-            <html><body>
-            <table>
-                <tr><th>SN</th><th>Name</th><th>Division</th><th>Points</th></tr>
-                <tr><td>0022</td><td>Baraka Joseph</td><td>II</td><td>12</td></tr>
-                '.$row.'
-            </table>
-            </body></html>';
+            <html>
+              <body>
+                <h3>CSEE 2024 EXAMINATION RESULTS P0104 - KIBOBO SECONDARY SCHOOL CENTRE DIVISION</h3>
+                <table>
+                  <tr><td>CNO</td><td>SEX</td><td>AGGT</td><td>DIV</td><td>DETAILED SUBJECTS</td></tr>
+                  <tr><td>P0104/0001</td><td>F</td><td>17</td><td>III</td><td>CIV-\'B\' HIST-\'C\'</td></tr>
+                  <tr><td>P0104/'.$serial.'</td><td>M</td><td>17</td><td>III</td><td>CIV-\'B\' HIST-\'C\' GEO-\'D\'</td></tr>
+                </table>
+              </body>
+            </html>';
     }
 
     public function test_rejects_an_invalid_index_number(): void
     {
-        $result = $this->service()->verify('not-an-index', 'Amina Khalid', 'psle');
+        $result = $this->service()->verify('not-an-index', 'Amina Khalid', 'csee');
 
         $this->assertFalse($result['verified']);
         $this->assertSame('invalid_index', $result['error_type']);
     }
 
-    public function test_rejects_an_index_number_for_the_wrong_exam_type(): void
+    public function test_psle_lookup_reports_not_found_without_school_number(): void
     {
-        // CSEE index used against the PSLE format.
-        $result = $this->service()->verify('S1832/0036/2024', 'Amina Khalid', 'psle');
+        // The application's PSLE format (PS0101/0023/2024) cannot resolve the
+        // 3-digit school sub-code NECTA uses, so it reports not-found clearly.
+        $result = $this->service()->verify('PS0101/0023/2024', null, 'psle');
 
         $this->assertFalse($result['verified']);
-        $this->assertSame('invalid_index', $result['error_type']);
+        $this->assertSame('not_found', $result['error_type']);
+        $this->assertStringContainsString('school number', $result['error']);
     }
 
-    public function test_verifies_a_matching_candidate(): void
+    public function test_verifies_a_csee_candidate_whose_index_resolves(): void
     {
         Http::fake([
-            'matokeo.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
+            'onlinesys.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
         ]);
 
-        $result = $this->service()->verify('PS0101/0023/2024', 'Amina Khalid', 'psle');
+        $result = $this->service()->verify('S0104/0002/2024', null, 'csee');
 
         $this->assertTrue($result['verified']);
-        $this->assertSame('Amina Khalid', $result['matched_name']);
         $this->assertSame('III', $result['division']);
-        $this->assertSame(20, $result['points']);
+        $this->assertSame(17, $result['points']);
+        $this->assertSame('P0104/0002', $result['raw_result_data']['cno']);
+        $this->assertSame('Kibobo Secondary School', $result['raw_result_data']['school_name']);
         $this->assertNull($result['error']);
     }
 
-    public function test_name_matching_is_fuzzy(): void
+    public function test_verification_is_prefix_agnostic(): void
     {
         Http::fake([
-            'matokeo.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
+            'onlinesys.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
         ]);
 
-        // Middle name / spelling differences should still verify.
-        $result = $this->service()->verify('PS0101/0023/2024', 'Amina  Khalid', 'psle');
+        // NECTA publishes the CNO as P0104/0002 while the application index
+        // uses an S prefix — matching is on the numeric centre + serial.
+        $result = $this->service()->verify('S0104/0002/2024', null, 'csee');
 
         $this->assertTrue($result['verified']);
+        $this->assertSame('P0104/0002', $result['raw_result_data']['cno']);
     }
 
-    public function test_mismatched_name_is_not_verified(): void
+    public function test_name_comparison_is_skipped_when_necta_publishes_no_name(): void
     {
         Http::fake([
-            'matokeo.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
+            'onlinesys.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
         ]);
 
-        $result = $this->service()->verify('PS0101/0023/2024', 'Baraka Joseph', 'psle');
+        $result = $this->service()->verify('S0104/0002/2024', 'Amina Khalid', 'csee');
+
+        $this->assertTrue($result['verified']);
+        $this->assertNull($result['matched_name']);
+    }
+
+    public function test_returns_not_found_when_serial_not_on_the_page(): void
+    {
+        Http::fake([
+            'onlinesys.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
+        ]);
+
+        $result = $this->service()->verify('S0104/7777/2024', null, 'csee');
 
         $this->assertFalse($result['verified']);
-        $this->assertSame('name_mismatch', $result['error_type']);
+        $this->assertSame('not_found', $result['error_type']);
     }
 
-    public function test_returns_not_found_when_serial_missing(): void
+    public function test_returns_not_found_when_necta_serves_an_error_page(): void
     {
         Http::fake([
-            'matokeo.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
+            'onlinesys.necta.go.tz/*' => Http::response('Not Found', 404),
         ]);
 
-        // Serial 7777 is not present on the results page.
-        $result = $this->service()->verify('PS0101/7777/2024', 'Amina Khalid', 'psle');
+        $result = $this->service()->verify('S0104/0002/2024', null, 'csee');
 
         $this->assertFalse($result['verified']);
         $this->assertSame('not_found', $result['error_type']);
@@ -105,34 +121,22 @@ class NectaVerificationServiceTest extends TestCase
     public function test_returns_network_error_when_necta_unreachable(): void
     {
         Http::fake([
-            'matokeo.necta.go.tz/*' => fn () => throw new ConnectionException('Connection refused'),
+            'onlinesys.necta.go.tz/*' => fn () => throw new ConnectionException('Connection refused'),
         ]);
 
-        $result = $this->service()->verify('PS0101/0023/2024', 'Amina Khalid', 'psle');
+        $result = $this->service()->verify('S0104/0002/2024', null, 'csee');
 
         $this->assertFalse($result['verified']);
         $this->assertSame('network_error', $result['error_type']);
     }
 
-    public function test_returns_not_found_when_necta_serves_an_error_page(): void
-    {
-        Http::fake([
-            'matokeo.necta.go.tz/*' => Http::response('Service Unavailable', 503),
-        ]);
-
-        $result = $this->service()->verify('PS0101/0023/2024', 'Amina Khalid', 'psle');
-
-        $this->assertFalse($result['verified']);
-        $this->assertSame('not_found', $result['error_type']);
-    }
-
     public function test_returns_scraper_structure_error_when_html_changes(): void
     {
         Http::fake([
-            'matokeo.necta.go.tz/*' => Http::response('<html><div>totally different</div></html>', 200),
+            'onlinesys.necta.go.tz/*' => Http::response('<html><div>totally different</div></html>', 200),
         ]);
 
-        $result = $this->service()->verify('PS0101/0023/2024', 'Amina Khalid', 'psle');
+        $result = $this->service()->verify('S0104/0002/2024', null, 'csee');
 
         $this->assertFalse($result['verified']);
         $this->assertSame('scraper_structure_error', $result['error_type']);
@@ -141,21 +145,25 @@ class NectaVerificationServiceTest extends TestCase
     public function test_results_are_cached_for_24_hours(): void
     {
         Http::fake([
-            'matokeo.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
+            'onlinesys.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
         ]);
 
-        $this->service()->verify('PS0101/0023/2024', 'Amina Khalid', 'psle');
-        $this->service()->verify('PS0101/0023/2024', 'Amina Khalid', 'psle');
+        $this->service()->verify('S0104/0002/2024', null, 'csee');
+        $this->service()->verify('S0104/0002/2024', null, 'csee');
 
         Http::assertSentCount(1);
 
-        $this->assertTrue(Cache::has('necta:psle:PS0101/0023/2024:2024'));
+        $this->assertTrue(Cache::has('necta:csee:S0104/0002/2024:2024'));
     }
 
-    public function test_scraper_structure_and_not_found_exceptions_are_distinct(): void
+    public function test_names_match_fuzzy(): void
     {
-        // Both are separate classes so the code paths (and logs) stay distinct.
-        $this->assertInstanceOf(\Exception::class, new NectaNotFoundException('x'));
-        $this->assertInstanceOf(\Exception::class, new NectaScraperStructureException('x'));
+        $service = $this->service();
+
+        $this->assertTrue($service->namesMatch('Amina Khalid', 'Amina Khalid'));
+        $this->assertTrue($service->namesMatch('Amina  Khalid', 'Amina Khalid'));
+        $this->assertTrue($service->namesMatch('Amina M. Khalid', 'Amina Khalid'));
+        $this->assertFalse($service->namesMatch('Baraka Joseph', 'Amina Khalid'));
+        $this->assertFalse($service->namesMatch('', 'Amina Khalid'));
     }
 }

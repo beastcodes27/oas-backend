@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -16,20 +17,28 @@ class NectaLookupTest extends TestCase
     {
         $this->postJson('/api/v1/necta/lookup', [
             'exam_type' => 'psle',
-            'reg_number' => 'PS11001001',
-            'year' => 2023,
+            'reg_number' => 'PS0101/0023/2024',
         ])->assertStatus(401);
     }
 
     public function test_lookup_returns_a_deterministic_result(): void
     {
+        Http::fake([
+            'onlinesys.necta.go.tz/*' => Http::response('
+                <html><body>
+                <h3>CSEE 2024 EXAMINATION RESULTS P0104 - KIBOBO SECONDARY SCHOOL CENTRE DIVISION</h3>
+                <table>
+                  <tr><td>P0104/0002</td><td>M</td><td>17</td><td>III</td><td>CIV-\'B\' HIST-\'C\' GEO-\'D\'</td></tr>
+                </table>
+                </body></html>', 200),
+        ]);
+
         $user = User::factory()->create();
 
         $response = $this->actingAs($user, 'sanctum')
             ->postJson('/api/v1/necta/lookup', [
-                'exam_type' => 'psle',
-                'reg_number' => 'PS11001001',
-                'year' => 2023,
+                'exam_type' => 'csee',
+                'reg_number' => 'S0104/0002/2024',
             ]);
 
         $response->assertOk()
@@ -37,10 +46,10 @@ class NectaLookupTest extends TestCase
                 'data' => [
                     'candidate_name',
                     'school_name',
+                    'cno',
                     'exam_type',
                     'exam_label',
                     'reg_number',
-                    'year',
                     'division',
                     'points',
                     'subjects' => [
@@ -48,16 +57,17 @@ class NectaLookupTest extends TestCase
                     ],
                 ],
             ])
-            ->assertJsonPath('data.reg_number', 'PS11001001')
-            ->assertJsonPath('data.year', 2023)
-            ->assertJsonPath('data.school_name', fn (string $value) => $value !== '');
+            ->assertJsonPath('data.cno', 'P0104/0002')
+            ->assertJsonPath('data.division', 'III')
+            ->assertJsonPath('data.points', 17)
+            ->assertJsonPath('data.school_name', 'Kibobo Secondary School')
+            ->assertJsonPath('data.reg_number', 'S0104/0002/2024');
 
         $first = $response->json('data');
         $second = $this->actingAs($user, 'sanctum')
             ->postJson('/api/v1/necta/lookup', [
-                'exam_type' => 'psle',
-                'reg_number' => 'PS11001001',
-                'year' => 2023,
+                'exam_type' => 'csee',
+                'reg_number' => 'S0104/0002/2024',
             ])
             ->json('data');
 
@@ -71,8 +81,7 @@ class NectaLookupTest extends TestCase
         $this->actingAs($user, 'sanctum')
             ->postJson('/api/v1/necta/lookup', [
                 'exam_type' => 'university',
-                'reg_number' => 'PS11001001',
-                'year' => 2023,
+                'reg_number' => 'PS0101/0023/2024',
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('exam_type');
@@ -97,7 +106,7 @@ class NectaLookupTest extends TestCase
                     'ward' => 'Korongoni',
                     'phone' => '0755 100 100',
                     'exam_type' => 'ftna',
-                    'exam_reg_number' => 'F2.001.2022',
+                    'exam_reg_number' => 'E0231/0456/2022',
                     'exam_year' => 2022,
                     'exam_confirmed' => true,
                 ],

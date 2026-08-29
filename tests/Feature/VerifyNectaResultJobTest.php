@@ -10,6 +10,7 @@ use App\Models\Student;
 use App\Services\NectaVerificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -23,14 +24,18 @@ class VerifyNectaResultJobTest extends TestCase
     {
         parent::setUp();
 
+        // The array cache persists across tests within one process, which would
+        // otherwise let one test's result satisfy another test's lookup.
+        Cache::flush();
+
         $this->school = School::factory()->create();
     }
 
     private function applicationWithStudent(array $studentOverrides = []): Application
     {
         $student = Student::factory()->create(array_merge([
-            'exam_type' => 'psle',
-            'exam_reg_number' => 'PS0101/0023/2024',
+            'exam_type' => 'csee',
+            'exam_reg_number' => 'S0104/0002/2024',
             'exam_year' => 2024,
             'exam_confirmed' => true,
         ], $studentOverrides));
@@ -41,24 +46,25 @@ class VerifyNectaResultJobTest extends TestCase
         ]);
     }
 
-    private function resultHtml(): string
+    private function centreHtml(string $serial = '0002'): string
     {
         return '
-            <table>
-                <tr><td>0023</td><td>'.$this->school->name.'</td><td>II</td><td>12</td></tr>
-            </table>';
+            <html>
+              <body>
+                <h3>CSEE 2024 EXAMINATION RESULTS P0104 - KIBOBO SECONDARY SCHOOL CENTRE DIVISION</h3>
+                <table>
+                  <tr><td>P0104/'.$serial.'</td><td>M</td><td>17</td><td>III</td><td>CIV-\'B\' HIST-\'C\' GEO-\'D\'</td></tr>
+                </table>
+              </body>
+            </html>';
     }
 
     public function test_job_marks_application_as_verified(): void
     {
         $application = $this->applicationWithStudent();
-        $name = $application->student->full_name;
 
         Http::fake([
-            'matokeo.necta.go.tz/*' => Http::response('
-                <table>
-                    <tr><td>0023</td><td>'.$name.'</td><td>II</td><td>12</td></tr>
-                </table>', 200),
+            'onlinesys.necta.go.tz/*' => Http::response($this->centreHtml(), 200),
         ]);
 
         $job = new VerifyNectaResult($application);
@@ -67,18 +73,14 @@ class VerifyNectaResultJobTest extends TestCase
         $application->refresh();
 
         $this->assertEquals(VerificationStatus::Verified, $application->verification_status);
-        $this->assertSame($name, $application->necta_matched_name);
-        $this->assertSame('II', $application->necta_division);
+        $this->assertSame('III', $application->necta_division);
         $this->assertNotNull($application->necta_verified_at);
     }
 
     public function test_job_marks_application_as_not_found(): void
     {
         Http::fake([
-            'matokeo.necta.go.tz/*' => Http::response('
-                <table>
-                    <tr><td>0000</td><td>Someone Else</td><td>I</td><td>4</td></tr>
-                </table>', 200),
+            'onlinesys.necta.go.tz/*' => Http::response($this->centreHtml('9999'), 200),
         ]);
 
         $application = $this->applicationWithStudent();
@@ -95,10 +97,12 @@ class VerifyNectaResultJobTest extends TestCase
     public function test_job_marks_application_as_failed_on_network_error(): void
     {
         Http::fake([
-            'matokeo.necta.go.tz/*' => fn () => throw new ConnectionException('timeout'),
+            'onlinesys.necta.go.tz/*' => fn () => throw new ConnectionException('timeout'),
         ]);
 
-        $application = $this->applicationWithStudent();
+        // A distinct index so the 24h cache from other tests cannot satisfy
+        // this lookup.
+        $application = $this->applicationWithStudent(['exam_reg_number' => 'S0104/0777/2024']);
 
         $job = new VerifyNectaResult($application);
         $job->handle(app(NectaVerificationService::class));
