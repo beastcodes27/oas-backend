@@ -4,14 +4,14 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateWindowRequest extends FormRequest
+class StoreGalleryItemRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return $this->user()?->isStaff() === true;
+        return $this->user()?->is_admin === true;
     }
 
     /**
@@ -22,9 +22,9 @@ class UpdateWindowRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'applications_open' => ['required', 'boolean'],
-            'window_opens_at' => ['nullable', 'date'],
-            'window_closes_at' => ['nullable', 'date', 'after_or_equal:window_opens_at'],
+            'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'caption' => ['nullable', 'string', 'max:200'],
+            'description' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

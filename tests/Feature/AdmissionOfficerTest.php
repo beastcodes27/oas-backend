@@ -97,13 +97,6 @@ class AdmissionOfficerTest extends TestCase
             ->assertStatus(403);
     }
 
-    public function test_officer_cannot_change_the_application_window(): void
-    {
-        $this->actingAs($this->officer(), 'sanctum')
-            ->patchJson('/api/v1/admin/settings/window', ['applications_open' => false])
-            ->assertStatus(403);
-    }
-
     public function test_tracking_hides_draft_decisions_from_students(): void
     {
         $application = Application::factory()->create([

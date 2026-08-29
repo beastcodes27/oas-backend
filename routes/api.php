@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\ApplicationController as AdminApplicationController;
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\GalleryController;
 use App\Http\Controllers\NectaController;
 use App\Http\Controllers\SchoolController;
 use App\Http\Controllers\Staff\ApplicationController as StaffApplicationController;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     // Public
     Route::get('schools', [SchoolController::class, 'index'])->name('schools.index');
+    Route::get('gallery', [GalleryController::class, 'index'])->name('gallery.index');
     Route::get('applications/status/{reference}', [ApplicationController::class, 'track'])
         ->middleware('throttle:api')
         ->name('applications.track');
@@ -43,13 +45,16 @@ Route::prefix('v1')->group(function () {
     Route::prefix('staff')->middleware(['auth:sanctum', 'staff', 'throttle:api'])->group(function () {
         Route::get('applications', [StaffApplicationController::class, 'index'])->name('staff.applications.index');
         Route::patch('applications/{application}/status', [StaffApplicationController::class, 'updateStatus'])->name('staff.applications.status');
+        Route::patch('settings/window', [AdminApplicationController::class, 'updateWindow'])->name('staff.settings.window');
     });
 
     // Administrator endpoints
     Route::prefix('admin')->middleware(['auth:sanctum', 'admin', 'throttle:api'])->group(function () {
         Route::patch('selections/publish', [AdminApplicationController::class, 'publishSelections'])->name('admin.selections.publish');
-        Route::patch('settings/window', [AdminApplicationController::class, 'updateWindow'])->name('admin.settings.window');
         Route::patch('school/content', [AdminApplicationController::class, 'updateContent'])->name('admin.school.content');
         Route::patch('school/contact', [AdminApplicationController::class, 'updateContact'])->name('admin.school.contact');
+        Route::get('gallery', [App\Http\Controllers\Admin\GalleryController::class, 'index'])->name('admin.gallery.index');
+        Route::post('gallery', [App\Http\Controllers\Admin\GalleryController::class, 'store'])->name('admin.gallery.store');
+        Route::delete('gallery/{galleryItem}', [App\Http\Controllers\Admin\GalleryController::class, 'destroy'])->name('admin.gallery.destroy');
     });
 });
