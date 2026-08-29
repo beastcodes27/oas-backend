@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Exceptions\Necta\NectaNetworkException;
 use App\Exceptions\Necta\NectaNotFoundException;
 use App\Exceptions\Necta\NectaScraperStructureException;
-use DOMDocument;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -56,22 +55,27 @@ class NectaVerificationService
 
     /**
      * TETEA centre-page naming per exam: directory "{EXAM}{year}" and the
-     * lowercase/uppercase letter prefix NECTA used for that exam's centres.
+     * letter prefixes NECTA used for that exam's centres. Centres use either
+     * an S or a P prefix, so both are tried.
      *
-     * @var array<string, array{dir: string, file_prefix: string}>
+     * @var array<string, array{dir: string, file_prefixes: array<int, string>}>
      */
     private const TETEA_EXAMS = [
-        'ftna' => ['dir' => 'FTNA', 'file_prefix' => 'S'],
-        'csee' => ['dir' => 'CSEE', 'file_prefix' => 's'],
+        'ftna' => ['dir' => 'FTNA', 'file_prefixes' => ['S', 'P']],
+        'csee' => ['dir' => 'CSEE', 'file_prefixes' => ['s', 'p']],
     ];
 
     /**
      * Exam metadata for building the real NECTA results URLs.
      *
+     * Each exam publishes a year index page that links every centre's results
+     * page. The centre file prefix varies per centre (S or P), so the actual
+     * centre page URL is resolved from the index rather than guessed.
+     *
      * @var array<string, array{
      *     host: string,
      *     dir: string,
-     *     file_prefix: string,
+     *     index_file: string,
      *     label: string,
      *     school_number_required?: bool
      * }>
@@ -80,20 +84,20 @@ class NectaVerificationService
         'psle' => [
             'host' => 'https://onlinesys.necta.go.tz/results',
             'dir' => 'psle',
-            'file_prefix' => 'shl_ps', // PSLE centre pages are shl_ps{centre}{school}.htm
+            'index_file' => 'psle.htm',
             'label' => 'Standard 7 (PSLE)',
             'school_number_required' => true,
         ],
         'ftna' => [
             'host' => 'https://onlinesys.necta.go.tz/results',
             'dir' => 'ftna',
-            'file_prefix' => 'P', // FTNA centre pages use an uppercase P.
+            'index_file' => 'ftna.htm',
             'label' => 'Form 2 (FTNA)',
         ],
         'csee' => [
             'host' => 'https://onlinesys.necta.go.tz/results',
             'dir' => 'csee',
-            'file_prefix' => 'p', // CSEE centre pages use a lowercase p.
+            'index_file' => 'index.htm',
             'label' => 'Form 4 (CSEE)',
         ],
     ];
@@ -291,7 +295,7 @@ class NectaVerificationService
     private function resultSources(string $examType, array $exam, array $parsed): array
     {
         return [
-            'NECTA' => fn () => $this->fetchFromHost($exam, $parsed),
+            'NECTA' => fn () => $this->fetchFromHost($examType, $parsed),
             'TETEA' => fn () => $this->fetchFromTetea($examType, $parsed),
         ];
     }
@@ -299,13 +303,15 @@ class NectaVerificationService
     /**
      * Fetch a candidate page from NECTA's own results host.
      *
+     * The centre's actual results file is resolved from the year index first
+     * because NECTA mixes S/P centre prefixes per school (e.g. S0231 vs P0231).
+     *
      * @param  array{centre: string, serial: string, year: int}  $parsed
      * @return array<string, mixed>
      */
-    private function fetchFromHost(array $exam, array $parsed): array
+    private function fetchFromHost(string $examType, array $parsed): array
     {
-        $url = $exam['host'].'/'.$parsed['year'].'/'.$exam['dir'].'/results/'
-            .$exam['file_prefix'].$parsed['centre'].'.htm';
+        $url = $this->resolveCentreUrl($examType, $parsed);
 
         $response = Http::timeout(15)
             ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; OAS-Verifier/1.0)'])
@@ -323,6 +329,45 @@ class NectaVerificationService
     }
 
     /**
+     * Resolve the centre's results-page URL from the year index.
+     *
+     * @param  array{centre: string, serial: string, year: int}  $parsed
+     */
+    private function resolveCentreUrl(string $examType, array $parsed): string
+    {
+        $exam = self::EXAMS[$examType];
+        $indexUrl = $exam['host'].'/'.$parsed['year'].'/'.$exam['dir'].'/'.$exam['index_file'];
+
+        return Cache::remember(
+            'necta-centre:'.$examType.':'.$parsed['year'].':'.$parsed['centre'],
+            self::CACHE_TTL_SECONDS,
+            function () use ($exam, $indexUrl, $parsed): string {
+                $response = Http::timeout(15)
+                    ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; OAS-Verifier/1.0)'])
+                    ->get($indexUrl);
+
+                if ($response->failed() || $response->body() === '') {
+                    throw new NectaNotFoundException("NECTA index returned {$response->status()} for {$indexUrl}");
+                }
+
+                // Find the centre's results link, e.g. "results/S0231.htm" or
+                // "results/p0101.htm". The letter prefix varies per centre.
+                $pattern = '/[hH][rR][eE][fF]="([^"]*?(?:[A-Za-z]{1,3})?'.preg_quote($parsed['centre'], '/').'\.htm)"/';
+
+                if (! preg_match($pattern, $response->body(), $match)) {
+                    throw new NectaNotFoundException("Centre {$parsed['centre']} not found in NECTA index.");
+                }
+
+                $href = $match[1];
+
+                return str_starts_with($href, 'http')
+                    ? $href
+                    : $exam['host'].'/'.$parsed['year'].'/'.$exam['dir'].'/'.$href;
+            },
+        );
+    }
+
+    /**
      * Fetch a candidate page from the TETEA mirror.
      *
      * @param  array{centre: string, serial: string, year: int}  $parsed
@@ -336,26 +381,45 @@ class NectaVerificationService
             throw new NectaNotFoundException('No TETEA mirror available for this exam.');
         }
 
-        $url = self::TETEA_BASE.'/'.$config['dir'].$parsed['year'].'/'
-            .$config['file_prefix'].$parsed['centre'].'.htm';
+        $lastError = null;
 
-        $response = Http::timeout(15)
-            ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; OAS-Verifier/1.0)'])
-            ->get($url);
+        foreach ($config['file_prefixes'] as $prefix) {
+            $url = self::TETEA_BASE.'/'.$config['dir'].$parsed['year'].'/'.$prefix.$parsed['centre'].'.htm';
 
-        if ($response->failed()) {
-            throw new NectaNotFoundException("TETEA returned {$response->status()} for {$url}");
+            try {
+                $response = Http::timeout(15)
+                    ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; OAS-Verifier/1.0)'])
+                    ->get($url);
+
+                if ($response->failed()) {
+                    $lastError = "TETEA returned {$response->status()} for {$url}";
+
+                    continue;
+                }
+
+                if ($response->body() === '') {
+                    $lastError = "TETEA returned an empty response for {$url}";
+
+                    continue;
+                }
+
+                return $this->parseCandidateFromHtml($response->body(), $parsed['centre'], $parsed['serial']);
+            } catch (NectaScraperStructureException|NectaNotFoundException $e) {
+                // A parseable TETEA page is authoritative — if the serial is
+                // absent there, do not try the other prefix.
+                throw $e;
+            }
         }
 
-        if ($response->body() === '') {
-            throw new NectaNotFoundException('Empty response from TETEA.');
-        }
-
-        return $this->parseCandidateFromHtml($response->body(), $parsed['centre'], $parsed['serial']);
+        throw new NectaNotFoundException($lastError ?? 'No TETEA centre page found.');
     }
 
     /**
      * Parse the candidate row for a given centre + serial from the results page.
+     *
+     * NECTA's HTML is frequently malformed: candidate rows are often emitted as
+     * bare <td> cells with no <tr> wrapper, so the parse anchors on the
+     * candidate-number cell itself and collects the following cells.
      *
      * @return array<string, mixed>
      */
@@ -365,52 +429,58 @@ class NectaVerificationService
             throw new NectaNotFoundException('Results page indicates no results available.');
         }
 
-        $dom = new DOMDocument;
-        libxml_use_internal_errors(true);
-        $loaded = $dom->loadHTML($html);
-        libxml_clear_errors();
-
-        if (! $loaded || $dom->getElementsByTagName('table')->length === 0) {
+        if (! str_contains(strtolower($html), '<table')) {
             throw new NectaScraperStructureException('Results page contains no candidate table.');
         }
 
-        // Match on the numeric centre + serial regardless of the letter prefix,
-        // since NECTA uses P/S/E prefixes that differ from the application's.
-        $target = $this->normalizeCno($centre.$serial);
-        $found = null;
+        // Locate the candidate number, e.g. "S0231/0001" or "P0104/0002".
+        // NECTA emits candidate rows as bare <td> cells (no <tr>), so back up
+        // to the cell that contains the number, then collect the following
+        // cells which make up the row.
+        $cnoPattern = '/\b[A-Za-z]{0,3}'.preg_quote($centre, '/')
+            .'\/'.preg_quote($serial, '/').'\b/i';
 
-        foreach ($dom->getElementsByTagName('tr') as $row) {
-            $cells = $row->getElementsByTagName('td');
-            if ($cells->length < 4) {
-                continue;
-            }
-
-            if ($this->normalizeCno($cells->item(0)->textContent) === $target) {
-                $found = $cells;
-
-                break;
-            }
-        }
-
-        if ($found === null) {
+        if (! preg_match($cnoPattern, $html, $match, PREG_OFFSET_CAPTURE)) {
             throw new NectaNotFoundException("Candidate {$centre}/{$serial} not found on results page.");
         }
 
-        $values = [];
-        foreach ($found as $cell) {
-            $values[] = trim($cell->textContent);
+        $cellStart = strripos(substr($html, 0, $match[0][1]), '<td');
+
+        if ($cellStart === false) {
+            throw new NectaScraperStructureException('Could not locate the candidate cell.');
         }
 
-        // Expected columns: [CNO, SEX, AGGT, DIV, DETAILED SUBJECTS].
-        if (count($values) < 4) {
+        $segment = substr($html, $cellStart, 8000);
+
+        if (! preg_match_all('/<td[^>]*>(.*?)<\/td>/is', $segment, $cells)) {
+            throw new NectaScraperStructureException('Could not parse the candidate table row.');
+        }
+
+        $values = array_map(
+            static fn (string $cell): string => trim(strip_tags(html_entity_decode($cell))),
+            $cells[1],
+        );
+        $values = array_values(array_filter($values, static fn (string $v): bool => $v !== ''));
+
+        if ($values === [] || $this->normalizeCno($values[0]) !== $this->normalizeCno($centre.$serial)) {
+            throw new NectaScraperStructureException('Candidate row does not match the requested index.');
+        }
+
+        // Column layouts vary by exam:
+        //   CSEE:  [CNO, SEX, AGGT, DIV, DETAILED SUBJECTS]
+        //   FTNA:  [CNO, RegNo, SEX, AGGT, DIV, DETAILED SUBJECTS]
+        // Detect the layout by whether the second column is a sex (M/F).
+        $sexIndex = in_array(strtoupper($values[1] ?? ''), ['M', 'F'], true) ? 1 : 2;
+
+        if (count($values) < $sexIndex + 4) {
             throw new NectaScraperStructureException('Candidate table row does not have the expected columns.');
         }
 
-        $aggt = $values[2] ?? null;
-        $division = $values[3] ?? null;
+        $aggt = $values[$sexIndex + 1] ?? null;
+        $division = $values[$sexIndex + 2] ?? null;
         $division = (is_string($division) && in_array(strtoupper($division), ['0', 'ABS'], true)) ? null : $division;
         $points = (is_string($aggt) && is_numeric($aggt)) ? (int) $aggt : null;
-        $subjects = $this->parseSubjects(implode(' ', array_slice($values, 4)));
+        $subjects = $this->parseSubjects($values[$sexIndex + 3] ?? '');
 
         if ($division === null && $points === null && $subjects === []) {
             throw new NectaScraperStructureException('Candidate row has no usable result data.');

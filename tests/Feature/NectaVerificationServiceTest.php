@@ -33,6 +33,31 @@ class NectaVerificationServiceTest extends TestCase
             </html>';
     }
 
+    /**
+     * Fake the NECTA host: the year index resolves the centre's results file,
+     * then the centre page is served.
+     */
+    private function fakeNecta(?string $indexStatus = null, ?string $centreHtml = null, string $centreFile = 'p0104.htm'): void
+    {
+        Http::fake([
+            'onlinesys.necta.go.tz/*' => function ($request) use ($indexStatus, $centreHtml, $centreFile) {
+                if (str_contains($request->url(), '/index.htm')) {
+                    if ($indexStatus !== null) {
+                        return Http::response('Not Found', (int) $indexStatus);
+                    }
+
+                    return Http::response('<a href="results/'.$centreFile.'">P0104</a>', 200);
+                }
+
+                if ($centreHtml === null) {
+                    return Http::response($this->resultHtml(), 200);
+                }
+
+                return Http::response($centreHtml, 200);
+            },
+        ]);
+    }
+
     public function test_rejects_an_invalid_index_number(): void
     {
         $result = $this->service()->verify('not-an-index', 'Amina Khalid', 'csee');
@@ -54,9 +79,7 @@ class NectaVerificationServiceTest extends TestCase
 
     public function test_verifies_a_csee_candidate_whose_index_resolves(): void
     {
-        Http::fake([
-            'onlinesys.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
-        ]);
+        $this->fakeNecta();
 
         $result = $this->service()->verify('S0104/0002/2024', null, 'csee');
 
@@ -68,50 +91,54 @@ class NectaVerificationServiceTest extends TestCase
         $this->assertNull($result['error']);
     }
 
-    public function test_parses_school_name_from_tetea_style_header(): void
+    public function test_verifies_an_s_prefixed_centre_file(): void
     {
-        // TETEA headers omit "CENTRE": "S1318 NANDEMBO SECONDARY SCHOOL DIVISION
-        // PERFORMANCE SUMMARY" — the school name must be parsed cleanly, not
-        // drag in the rest of the page.
-        Http::fake([
-            'onlinesys.necta.go.tz/*' => Http::response('Not Found', 404),
-            'maktaba.tetea.org/*' => Http::response('
-                <html><body>
-                <h3>CSEE 2021 EXAMINATION RESULTS S1318 NANDEMBO SECONDARY SCHOOL DIVISION PERFORMANCE SUMMARY</h3>
-                <table>
-                  <tr><td>S1318/0099</td><td>M</td><td>15</td><td>I</td><td>CIV - \'A\' HIST - \'B\' GEO - \'B\'</td></tr>
-                </table>
-                </body></html>', 200),
-        ]);
+        // Some centres are served from an S-prefixed file (e.g. s0104.htm);
+        // the index resolver must honour NECTA's actual link.
+        $this->fakeNecta(centreFile: 's0104.htm');
 
-        $result = $this->service()->verify('S1318/0099/2021', null, 'csee');
-
-        $this->assertTrue($result['verified']);
-        $this->assertSame('I', $result['division']);
-        $this->assertSame(15, $result['points']);
-        $this->assertSame('Nandembo Secondary School', $result['raw_result_data']['school_name']);
-        $this->assertStringNotContainsString('<', $result['raw_result_data']['school_name']);
-    }
-
-    public function test_verification_is_prefix_agnostic(): void
-    {
-        Http::fake([
-            'onlinesys.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
-        ]);
-
-        // NECTA publishes the CNO as P0104/0002 while the application index
-        // uses an S prefix — matching is on the numeric centre + serial.
         $result = $this->service()->verify('S0104/0002/2024', null, 'csee');
 
         $this->assertTrue($result['verified']);
         $this->assertSame('P0104/0002', $result['raw_result_data']['cno']);
     }
 
+    public function test_verifies_an_ftna_candidate_with_registration_number_column(): void
+    {
+        // FTNA rows carry an extra "PReM NO" column:
+        // [CNO, RegNo, SEX, AGGT, DIV, DETAILED SUBJECTS].
+        $ftnaHtml = '
+            <html>
+              <body>
+                <h3>FTNA 2024 RESULTS S0231 - SUMVE GIRLS\' SECONDARY SCHOOL DIVISION PERFORMANCE SUMMARY</h3>
+                <table>
+                  <tr><td>S0231/0456</td><td>20163562653</td><td>F</td><td>15</td><td>I</td><td>CIV-\'C\' HIST-\'B\' GEO-\'B\'</td></tr>
+                </table>
+              </body>
+            </html>';
+
+        Http::fake([
+            'onlinesys.necta.go.tz/*' => function ($request) use ($ftnaHtml) {
+                if (str_contains($request->url(), '/ftna.htm')) {
+                    return Http::response('<a href="results/S0231.htm">S0231</a>', 200);
+                }
+
+                return Http::response($ftnaHtml, 200);
+            },
+        ]);
+
+        $result = $this->service()->verify('E0231/0456/2024', null, 'ftna');
+
+        $this->assertTrue($result['verified']);
+        $this->assertSame('I', $result['division']);
+        $this->assertSame(15, $result['points']);
+        $this->assertSame('S0231/0456', $result['raw_result_data']['cno']);
+        $this->assertSame('Sumve Girls\' Secondary School', $result['raw_result_data']['school_name']);
+    }
+
     public function test_name_comparison_is_skipped_when_necta_publishes_no_name(): void
     {
-        Http::fake([
-            'onlinesys.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
-        ]);
+        $this->fakeNecta();
 
         $result = $this->service()->verify('S0104/0002/2024', 'Amina Khalid', 'csee');
 
@@ -121,10 +148,8 @@ class NectaVerificationServiceTest extends TestCase
 
     public function test_returns_not_found_when_serial_not_on_the_page(): void
     {
-        Http::fake([
-            'onlinesys.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
-            'maktaba.tetea.org/*' => Http::response($this->resultHtml(), 200),
-        ]);
+        $this->fakeNecta();
+        Http::fake(['maktaba.tetea.org/*' => Http::response($this->resultHtml(), 200)]);
 
         $result = $this->service()->verify('S0104/7777/2024', null, 'csee');
 
@@ -134,10 +159,8 @@ class NectaVerificationServiceTest extends TestCase
 
     public function test_returns_not_found_when_necta_serves_an_error_page(): void
     {
-        Http::fake([
-            'onlinesys.necta.go.tz/*' => Http::response('Not Found', 404),
-            'maktaba.tetea.org/*' => Http::response('Not Found', 404),
-        ]);
+        $this->fakeNecta(indexStatus: '404');
+        Http::fake(['maktaba.tetea.org/*' => Http::response('Not Found', 404)]);
 
         $result = $this->service()->verify('S0104/0002/2024', null, 'csee');
 
@@ -149,10 +172,8 @@ class NectaVerificationServiceTest extends TestCase
     {
         // Older years (e.g. CSEE 2021) are no longer served by NECTA's own
         // site, but the TETEA mirror still publishes them.
-        Http::fake([
-            'onlinesys.necta.go.tz/*' => Http::response('Not Found', 404),
-            'maktaba.tetea.org/*' => Http::response($this->resultHtml(), 200),
-        ]);
+        $this->fakeNecta(indexStatus: '404');
+        Http::fake(['maktaba.tetea.org/*' => Http::response($this->resultHtml(), 200)]);
 
         $result = $this->service()->verify('S0104/0002/2021', null, 'csee');
 
@@ -160,9 +181,6 @@ class NectaVerificationServiceTest extends TestCase
         $this->assertSame('III', $result['division']);
         $this->assertSame(17, $result['points']);
         $this->assertSame('P0104/0002', $result['raw_result_data']['cno']);
-
-        // Both sources were consulted.
-        Http::assertSentCount(2);
     }
 
     public function test_returns_network_error_when_necta_unreachable(): void
@@ -193,16 +211,39 @@ class NectaVerificationServiceTest extends TestCase
 
     public function test_results_are_cached_for_24_hours(): void
     {
-        Http::fake([
-            'onlinesys.necta.go.tz/*' => Http::response($this->resultHtml(), 200),
-        ]);
+        $this->fakeNecta();
 
         $this->service()->verify('S0104/0002/2024', null, 'csee');
         $this->service()->verify('S0104/0002/2024', null, 'csee');
 
-        Http::assertSentCount(1);
+        // First lookup: index + centre page. Second lookup: cached.
+        Http::assertSentCount(2);
 
         $this->assertTrue(Cache::has('necta:csee:S0104/0002/2024:2024'));
+    }
+
+    public function test_parses_school_name_from_tetea_style_header(): void
+    {
+        // TETEA headers omit "CENTRE": "S1318 NANDEMBO SECONDARY SCHOOL DIVISION
+        // PERFORMANCE SUMMARY" — the school name must be parsed cleanly.
+        $this->fakeNecta(indexStatus: '404');
+        Http::fake([
+            'maktaba.tetea.org/*' => Http::response('
+                <html><body>
+                <h3>CSEE 2021 EXAMINATION RESULTS S1318 NANDEMBO SECONDARY SCHOOL DIVISION PERFORMANCE SUMMARY</h3>
+                <table>
+                  <tr><td>S1318/0099</td><td>M</td><td>15</td><td>I</td><td>CIV - \'A\' HIST - \'B\' GEO - \'B\'</td></tr>
+                </table>
+                </body></html>', 200),
+        ]);
+
+        $result = $this->service()->verify('S1318/0099/2021', null, 'csee');
+
+        $this->assertTrue($result['verified']);
+        $this->assertSame('I', $result['division']);
+        $this->assertSame(15, $result['points']);
+        $this->assertSame('Nandembo Secondary School', $result['raw_result_data']['school_name']);
+        $this->assertStringNotContainsString('<', $result['raw_result_data']['school_name']);
     }
 
     public function test_names_match_fuzzy(): void

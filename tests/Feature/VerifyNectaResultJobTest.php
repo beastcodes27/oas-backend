@@ -64,7 +64,13 @@ class VerifyNectaResultJobTest extends TestCase
         $application = $this->applicationWithStudent();
 
         Http::fake([
-            'onlinesys.necta.go.tz/*' => Http::response($this->centreHtml(), 200),
+            'onlinesys.necta.go.tz/*' => function ($request) {
+                if (str_contains($request->url(), '/index.htm')) {
+                    return Http::response('<a href="results/p0104.htm">P0104</a>', 200);
+                }
+
+                return Http::response($this->centreHtml(), 200);
+            },
         ]);
 
         $job = new VerifyNectaResult($application);
@@ -80,7 +86,13 @@ class VerifyNectaResultJobTest extends TestCase
     public function test_job_marks_application_as_not_found(): void
     {
         Http::fake([
-            'onlinesys.necta.go.tz/*' => Http::response($this->centreHtml('9999'), 200),
+            'onlinesys.necta.go.tz/*' => function ($request) {
+                if (str_contains($request->url(), '/index.htm')) {
+                    return Http::response('<a href="results/p0104.htm">P0104</a>', 200);
+                }
+
+                return Http::response($this->centreHtml('9999'), 200);
+            },
             'maktaba.tetea.org/*' => Http::response('Not Found', 404),
         ]);
 

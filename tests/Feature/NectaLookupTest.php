@@ -23,17 +23,23 @@ class NectaLookupTest extends TestCase
 
     public function test_lookup_returns_a_deterministic_result(): void
     {
-        Http::fake([
-            'onlinesys.necta.go.tz/*' => Http::response('
-                <html><body>
-                <h3>CSEE 2024 EXAMINATION RESULTS P0104 - KIBOBO SECONDARY SCHOOL CENTRE DIVISION</h3>
-                <table>
-                  <tr><td>P0104/0002</td><td>M</td><td>17</td><td>III</td><td>CIV-\'B\' HIST-\'C\' GEO-\'D\'</td></tr>
-                </table>
-                </body></html>', 200),
-        ]);
-
         $user = User::factory()->create();
+
+        Http::fake([
+            'onlinesys.necta.go.tz/*' => function ($request) {
+                if (str_contains($request->url(), '/index.htm')) {
+                    return Http::response('<a href="results/p0104.htm">P0104</a>', 200);
+                }
+
+                return Http::response('
+                    <html><body>
+                    <h3>CSEE 2024 EXAMINATION RESULTS P0104 - KIBOBO SECONDARY SCHOOL CENTRE DIVISION</h3>
+                    <table>
+                      <tr><td>P0104/0002</td><td>M</td><td>17</td><td>III</td><td>CIV-\'B\' HIST-\'C\' GEO-\'D\'</td></tr>
+                    </table>
+                    </body></html>', 200);
+            },
+        ]);
 
         $response = $this->actingAs($user, 'sanctum')
             ->postJson('/api/v1/necta/lookup', [
