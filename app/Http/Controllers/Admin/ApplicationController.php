@@ -39,6 +39,7 @@ class ApplicationController extends Controller
 
         $school->update([
             'combinations' => $request->validated('combinations') ?? [],
+            'forms' => $request->validated('forms') ?? [],
             'result_links' => $request->validated('result_links') ?? [],
         ]);
 

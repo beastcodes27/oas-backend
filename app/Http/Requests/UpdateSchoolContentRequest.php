@@ -25,6 +25,9 @@ class UpdateSchoolContentRequest extends FormRequest
             'combinations' => ['nullable', 'array'],
             'combinations.*' => ['string', 'max:120'],
 
+            'forms' => ['nullable', 'array'],
+            'forms.*' => ['integer', 'min:1', 'max:6'],
+
             'result_links' => ['nullable', 'array'],
             'result_links.*.name' => ['required', 'string', 'max:200'],
             'result_links.*.url' => ['required', 'string', 'url', 'max:500'],

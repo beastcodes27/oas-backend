@@ -23,6 +23,7 @@ class SchoolContentTest extends TestCase
                     'PCB — Physics, Chemistry, Biology',
                     'HGL — History, Geography, Kiswahili',
                 ],
+                'forms' => [1, 2, 3, 4, 5, 6],
                 'result_links' => [
                     ['name' => 'Form 4 Results 2023', 'url' => 'https://onlinesys.necta.go.tz/results/2023/csee/results/p0138.htm'],
                     ['name' => 'Form 2 Results 2024', 'url' => 'https://onlinesys.necta.go.tz/results/2024/ftna/results/P0104.htm'],
@@ -35,6 +36,7 @@ class SchoolContentTest extends TestCase
             ->assertJsonPath('data.result_links.0.name', 'Form 4 Results 2023');
 
         $this->assertSame(3, count($school->fresh()->combinations));
+        $this->assertSame(6, count($school->fresh()->forms));
         $this->assertSame(2, count($school->fresh()->result_links));
     }
 
