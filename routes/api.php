@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\OfficerController;
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\GalleryController;
+use App\Http\Controllers\HomeFeatureController;
 use App\Http\Controllers\NectaController;
 use App\Http\Controllers\SchoolController;
 use App\Http\Controllers\Staff\ApplicationController as StaffApplicationController;
@@ -14,6 +15,7 @@ Route::prefix('v1')->group(function () {
     // Public
     Route::get('schools', [SchoolController::class, 'index'])->name('schools.index');
     Route::get('gallery', [GalleryController::class, 'index'])->name('gallery.index');
+    Route::get('home-features', [HomeFeatureController::class, 'index'])->name('home-features.index');
     Route::get('applications/status/{reference}', [ApplicationController::class, 'track'])
         ->middleware('throttle:api')
         ->name('applications.track');
@@ -64,5 +66,9 @@ Route::prefix('v1')->group(function () {
         Route::post('officers', [OfficerController::class, 'store'])->name('admin.officers.store');
         Route::patch('officers/{user}/password', [OfficerController::class, 'resetPassword'])->name('admin.officers.password');
         Route::delete('officers/{user}', [OfficerController::class, 'destroy'])->name('admin.officers.destroy');
+        Route::get('home-features', [App\Http\Controllers\Admin\HomeFeatureController::class, 'index'])->name('admin.home-features.index');
+        Route::post('home-features', [App\Http\Controllers\Admin\HomeFeatureController::class, 'store'])->name('admin.home-features.store');
+        Route::put('home-features/{homeFeature}', [App\Http\Controllers\Admin\HomeFeatureController::class, 'update'])->name('admin.home-features.update');
+        Route::delete('home-features/{homeFeature}', [App\Http\Controllers\Admin\HomeFeatureController::class, 'destroy'])->name('admin.home-features.destroy');
     });
 });
