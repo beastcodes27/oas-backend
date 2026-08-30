@@ -54,6 +54,8 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'frontend_url' => env('FRONTEND_URL', 'https://oas.devtz.com'),
+
     'force_https' => env('APP_FORCE_HTTPS', false),
 
     /*
