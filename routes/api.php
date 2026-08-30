@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ApplicationController as AdminApplicationController;
+use App\Http\Controllers\Admin\OfficerController;
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\GalleryController;
@@ -59,5 +60,9 @@ Route::prefix('v1')->group(function () {
         Route::get('gallery', [App\Http\Controllers\Admin\GalleryController::class, 'index'])->name('admin.gallery.index');
         Route::post('gallery', [App\Http\Controllers\Admin\GalleryController::class, 'store'])->name('admin.gallery.store');
         Route::delete('gallery/{galleryItem}', [App\Http\Controllers\Admin\GalleryController::class, 'destroy'])->name('admin.gallery.destroy');
+        Route::get('officers', [OfficerController::class, 'index'])->name('admin.officers.index');
+        Route::post('officers', [OfficerController::class, 'store'])->name('admin.officers.store');
+        Route::patch('officers/{user}/password', [OfficerController::class, 'resetPassword'])->name('admin.officers.password');
+        Route::delete('officers/{user}', [OfficerController::class, 'destroy'])->name('admin.officers.destroy');
     });
 });
