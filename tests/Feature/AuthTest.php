@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -108,5 +109,59 @@ class AuthTest extends TestCase
             ->assertOk();
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_user_can_change_email(): void
+    {
+        $user = User::factory()->create(['email' => 'old@example.com']);
+
+        $this->actingAs($user, 'sanctum')
+            ->patchJson('/api/v1/auth/profile', ['email' => 'new@example.com'])
+            ->assertOk()
+            ->assertJsonPath('data.email', 'new@example.com');
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => 'new@example.com']);
+    }
+
+    public function test_email_change_must_be_unique(): void
+    {
+        $user = User::factory()->create();
+        User::factory()->create(['email' => 'taken@example.com']);
+
+        $this->actingAs($user, 'sanctum')
+            ->patchJson('/api/v1/auth/profile', ['email' => 'taken@example.com'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('email');
+    }
+
+    public function test_user_can_change_password_with_correct_current_password(): void
+    {
+        $user = User::factory()->create(['password' => 'CurrentPass1']);
+
+        $this->actingAs($user, 'sanctum')
+            ->patchJson('/api/v1/auth/profile', [
+                'current_password' => 'CurrentPass1',
+                'password' => 'NewPass123',
+                'password_confirmation' => 'NewPass123',
+            ])
+            ->assertOk();
+
+        $this->assertTrue(Hash::check('NewPass123', $user->fresh()->password));
+    }
+
+    public function test_password_change_requires_correct_current_password(): void
+    {
+        $user = User::factory()->create(['password' => 'CurrentPass1']);
+
+        $this->actingAs($user, 'sanctum')
+            ->patchJson('/api/v1/auth/profile', [
+                'current_password' => 'WrongPass',
+                'password' => 'NewPass123',
+                'password_confirmation' => 'NewPass123',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('current_password');
+
+        $this->assertTrue(Hash::check('CurrentPass1', $user->fresh()->password));
     }
 }

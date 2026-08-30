@@ -31,6 +31,9 @@ Route::prefix('v1')->group(function () {
         Route::get('me', [AuthController::class, 'me'])
             ->middleware('auth:sanctum')
             ->name('auth.me');
+        Route::patch('profile', [AuthController::class, 'updateProfile'])
+            ->middleware('auth:sanctum')
+            ->name('auth.profile');
     });
 
     // Authenticated applicant endpoints

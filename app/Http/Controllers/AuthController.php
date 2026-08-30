@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
+use App\Http\Requests\UpdateProfileRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -51,5 +52,33 @@ class AuthController extends Controller
     public function me(Request $request): UserResource
     {
         return new UserResource($request->user());
+    }
+
+    /**
+     * Update the authenticated user's email and/or password.
+     */
+    public function updateProfile(UpdateProfileRequest $request): UserResource
+    {
+        $user = $request->user();
+        $data = [];
+
+        if ($request->filled('email')) {
+            $data['email'] = $request->email;
+        }
+
+        if ($request->filled('password')) {
+            if (! Hash::check($request->current_password, $user->password)) {
+                throw ValidationException::withMessages([
+                    'current_password' => ['The current password is incorrect.'],
+                ]);
+            }
+            $data['password'] = $request->password;
+        }
+
+        if ($data !== []) {
+            $user->update($data);
+        }
+
+        return new UserResource($user->fresh());
     }
 }
