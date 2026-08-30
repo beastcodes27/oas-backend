@@ -9,6 +9,7 @@ use App\Http\Controllers\HomeFeatureController;
 use App\Http\Controllers\NectaController;
 use App\Http\Controllers\SchoolController;
 use App\Http\Controllers\Staff\ApplicationController as StaffApplicationController;
+use App\Http\Controllers\Staff\ApplicationExportController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -51,6 +52,7 @@ Route::prefix('v1')->group(function () {
     Route::prefix('staff')->middleware(['auth:sanctum', 'staff', 'throttle:api'])->group(function () {
         Route::get('applications', [StaffApplicationController::class, 'index'])->name('staff.applications.index');
         Route::patch('applications/{application}/status', [StaffApplicationController::class, 'updateStatus'])->name('staff.applications.status');
+        Route::get('applications/export', [ApplicationExportController::class, 'download'])->name('staff.applications.export');
     });
 
     // Administrator endpoints
