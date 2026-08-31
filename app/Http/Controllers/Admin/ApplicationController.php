@@ -20,7 +20,7 @@ class ApplicationController extends Controller
      */
     public function updateWindow(UpdateWindowRequest $request): SchoolResource
     {
-        $school = School::query()->firstOrFail();
+        $school = School::default();
 
         $school->update($request->validated());
 
@@ -35,7 +35,7 @@ class ApplicationController extends Controller
      */
     public function updateContent(UpdateSchoolContentRequest $request): SchoolResource
     {
-        $school = School::query()->firstOrFail();
+        $school = School::default();
 
         $school->update([
             'combinations' => $request->validated('combinations') ?? [],
@@ -52,7 +52,7 @@ class ApplicationController extends Controller
      */
     public function updateContact(UpdateSchoolContactRequest $request): SchoolResource
     {
-        $school = School::query()->firstOrFail();
+        $school = School::default();
 
         $school->update([
             'contact' => $request->validated('contact'),
@@ -69,7 +69,7 @@ class ApplicationController extends Controller
      */
     public function publishSelections(): JsonResponse
     {
-        $school = School::query()->firstOrFail();
+        $school = School::default();
 
         if ($school->selections_published_at !== null) {
             return response()->json([

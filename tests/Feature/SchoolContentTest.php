@@ -40,6 +40,21 @@ class SchoolContentTest extends TestCase
         $this->assertSame(2, count($school->fresh()->result_links));
     }
 
+    public function test_admin_can_update_school_content_without_existing_school_row(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/school/content', [
+                'combinations' => ['PCM — Physics, Chemistry, Advanced Maths'],
+                'result_links' => [],
+            ])
+            ->assertOk()
+            ->assertJsonCount(1, 'data.combinations');
+
+        $this->assertSame(1, School::query()->count());
+    }
+
     public function test_admin_can_clear_school_content(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);

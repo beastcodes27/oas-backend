@@ -39,4 +39,26 @@ class School extends Model
     {
         return $this->hasMany(Application::class);
     }
+
+    /**
+     * Return the school, creating a default row when the table is empty.
+     */
+    public static function default(): self
+    {
+        return static::query()->firstOrCreate(
+            ['name' => 'Shule Yetu'],
+            [
+                'short_name' => 'Shule Yetu',
+                'monogram' => 'SY',
+                'motto' => 'Knowledge · Discipline · Excellence',
+                'type' => 'Secondary School',
+                'region' => 'Kilimanjaro',
+                'district' => 'Moshi',
+                'rating' => 'A',
+                'capacity' => 600,
+                'forms' => [1, 2, 3, 4, 5, 6],
+                'applications_open' => false,
+            ],
+        );
+    }
 }
