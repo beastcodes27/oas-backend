@@ -41,6 +41,9 @@ class ApplicationController extends Controller
             'combinations' => $request->validated('combinations') ?? [],
             'forms' => $request->validated('forms') ?? [],
             'result_links' => $request->validated('result_links') ?? [],
+            'home_features_label' => $request->validated('home_features_label'),
+            'home_features_title' => $request->validated('home_features_title'),
+            'home_features_subtitle' => $request->validated('home_features_subtitle'),
         ]);
 
         return new SchoolResource($school->fresh());

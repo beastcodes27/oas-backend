@@ -31,6 +31,10 @@ class UpdateSchoolContentRequest extends FormRequest
             'result_links' => ['nullable', 'array'],
             'result_links.*.name' => ['required', 'string', 'max:200'],
             'result_links.*.url' => ['required', 'string', 'url', 'max:500'],
+
+            'home_features_label' => ['nullable', 'string', 'max:120'],
+            'home_features_title' => ['nullable', 'string', 'max:200'],
+            'home_features_subtitle' => ['nullable', 'string', 'max:500'],
         ];
     }
 }

@@ -124,6 +124,34 @@ class SchoolContentTest extends TestCase
             ->assertJsonPath('data.0.contact', ['phone' => '', 'email' => '', 'address' => '']);
     }
 
+    public function test_admin_can_update_home_features_heading(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        School::factory()->create();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/school/content', [
+                'home_features_label' => 'Why Our School',
+                'home_features_title' => 'Everything in one place',
+                'home_features_subtitle' => 'A short subtitle.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.home_features_label', 'Why Our School')
+            ->assertJsonPath('data.home_features_title', 'Everything in one place')
+            ->assertJsonPath('data.home_features_subtitle', 'A short subtitle.');
+    }
+
+    public function test_home_features_heading_has_defaults_when_absent(): void
+    {
+        School::query()->create(['name' => 'Minimal School', 'short_name' => 'MS']);
+
+        $this->getJson('/api/v1/schools')
+            ->assertOk()
+            ->assertJsonPath('data.0.home_features_label', 'Why MS')
+            ->assertJsonPath('data.0.home_features_title', 'Everything you need, all in one place')
+            ->assertJsonPath('data.0.home_features_subtitle', 'From application to admission, we simplify your journey into Minimal School.');
+    }
+
     public function test_admin_can_update_contact_details(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);
