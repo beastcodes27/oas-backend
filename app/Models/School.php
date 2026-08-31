@@ -32,6 +32,7 @@ class School extends Model
             'window_opens_at' => 'datetime',
             'window_closes_at' => 'datetime',
             'selections_published_at' => 'datetime',
+            'joining_instruction_published_at' => 'datetime',
         ];
     }
 

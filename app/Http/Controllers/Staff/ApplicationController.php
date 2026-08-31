@@ -4,10 +4,14 @@ namespace App\Http\Controllers\Staff;
 
 use App\Enums\ApplicationStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\PublishJoiningInstructionRequest;
 use App\Http\Requests\UpdateApplicationStatusRequest;
 use App\Http\Resources\ApplicationResource;
+use App\Http\Resources\SchoolResource;
 use App\Models\Application;
+use App\Models\School;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Storage;
 
 class ApplicationController extends Controller
 {
@@ -60,5 +64,33 @@ class ApplicationController extends Controller
         $application->load(['student.guardian', 'school']);
 
         return new ApplicationResource($application);
+    }
+
+    /**
+     * Publish the joining instructions shown to selected applicants.
+     *
+     * Accepts either an uploaded file or an external URL, plus an optional
+     * name/note. Marks the instruction as published so selected applicants
+     * can download it.
+     */
+    public function publishJoiningInstruction(PublishJoiningInstructionRequest $request): SchoolResource
+    {
+        $school = School::default();
+
+        if ($request->hasFile('file')) {
+            $path = $request->file('file')->store('instructions', 'public');
+            $url = Storage::disk('public')->url($path);
+        } else {
+            $url = $request->validated('url');
+        }
+
+        $school->update([
+            'joining_instruction_url' => $url,
+            'joining_instruction_name' => $request->validated('name'),
+            'joining_instruction_note' => $request->validated('note'),
+            'joining_instruction_published_at' => now(),
+        ]);
+
+        return new SchoolResource($school->fresh());
     }
 }

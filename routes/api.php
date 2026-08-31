@@ -54,6 +54,7 @@ Route::prefix('v1')->group(function () {
         Route::get('applications', [StaffApplicationController::class, 'index'])->name('staff.applications.index');
         Route::patch('applications/{application}/status', [StaffApplicationController::class, 'updateStatus'])->name('staff.applications.status');
         Route::get('applications/export', [ApplicationExportController::class, 'download'])->name('staff.applications.export');
+        Route::post('joining-instruction', [StaffApplicationController::class, 'publishJoiningInstruction'])->name('staff.joining-instruction.publish');
     });
 
     // Administrator endpoints
