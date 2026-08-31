@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ApplicationController as AdminApplicationController;
+use App\Http\Controllers\Admin\MediaController;
 use App\Http\Controllers\Admin\OfficerController;
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\AuthController;
@@ -57,6 +58,7 @@ Route::prefix('v1')->group(function () {
 
     // Administrator endpoints
     Route::prefix('admin')->middleware(['auth:sanctum', 'admin', 'throttle:api'])->group(function () {
+        Route::post('upload', [MediaController::class, 'store'])->name('admin.upload');
         Route::patch('selections/publish', [AdminApplicationController::class, 'publishSelections'])->name('admin.selections.publish');
         Route::patch('settings/window', [AdminApplicationController::class, 'updateWindow'])->name('admin.settings.window');
         Route::patch('school/content', [AdminApplicationController::class, 'updateContent'])->name('admin.school.content');
