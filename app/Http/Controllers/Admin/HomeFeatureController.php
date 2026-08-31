@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ReorderHomeFeaturesRequest;
 use App\Http\Requests\StoreHomeFeatureRequest;
 use App\Http\Requests\UpdateHomeFeatureRequest;
 use App\Http\Resources\HomeFeatureResource;
@@ -53,5 +54,17 @@ class HomeFeatureController extends Controller
         $homeFeature->delete();
 
         return response()->json(['message' => 'Feature removed.']);
+    }
+
+    /**
+     * Reorder home features by applying the given id list as the new sort order.
+     */
+    public function reorder(ReorderHomeFeaturesRequest $request): JsonResponse
+    {
+        foreach ($request->validated('ids') as $index => $id) {
+            HomeFeature::query()->whereKey($id)->update(['sort_order' => $index]);
+        }
+
+        return response()->json(['message' => 'Order updated.']);
     }
 }

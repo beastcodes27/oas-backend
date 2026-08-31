@@ -77,6 +77,24 @@ class HomeFeatureTest extends TestCase
             ->assertJsonValidationErrors('title');
     }
 
+    public function test_admin_can_reorder_home_features(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $a = HomeFeature::factory()->create(['title' => 'First', 'sort_order' => 0]);
+        $b = HomeFeature::factory()->create(['title' => 'Second', 'sort_order' => 1]);
+        $c = HomeFeature::factory()->create(['title' => 'Third', 'sort_order' => 2]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/home-features/reorder', [
+                'ids' => [$c->id, $a->id, $b->id],
+            ])
+            ->assertOk();
+
+        $this->assertSame(0, $c->fresh()->sort_order);
+        $this->assertSame(1, $a->fresh()->sort_order);
+        $this->assertSame(2, $b->fresh()->sort_order);
+    }
+
     public function test_non_admin_cannot_manage_home_features(): void
     {
         $user = User::factory()->create();

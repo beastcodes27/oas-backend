@@ -70,6 +70,7 @@ Route::prefix('v1')->group(function () {
         Route::delete('officers/{user}', [OfficerController::class, 'destroy'])->name('admin.officers.destroy');
         Route::get('home-features', [App\Http\Controllers\Admin\HomeFeatureController::class, 'index'])->name('admin.home-features.index');
         Route::post('home-features', [App\Http\Controllers\Admin\HomeFeatureController::class, 'store'])->name('admin.home-features.store');
+        Route::post('home-features/reorder', [App\Http\Controllers\Admin\HomeFeatureController::class, 'reorder'])->name('admin.home-features.reorder');
         Route::put('home-features/{homeFeature}', [App\Http\Controllers\Admin\HomeFeatureController::class, 'update'])->name('admin.home-features.update');
         Route::delete('home-features/{homeFeature}', [App\Http\Controllers\Admin\HomeFeatureController::class, 'destroy'])->name('admin.home-features.destroy');
     });
