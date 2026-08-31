@@ -37,14 +37,16 @@ class ApplicationController extends Controller
     {
         $school = School::default();
 
-        $school->update([
-            'combinations' => $request->validated('combinations') ?? [],
-            'forms' => $request->validated('forms') ?? [],
-            'result_links' => $request->validated('result_links') ?? [],
-            'home_features_label' => $request->validated('home_features_label'),
-            'home_features_title' => $request->validated('home_features_title'),
-            'home_features_subtitle' => $request->validated('home_features_subtitle'),
+        $fields = $request->safe()->only([
+            'combinations',
+            'forms',
+            'result_links',
+            'home_features_label',
+            'home_features_title',
+            'home_features_subtitle',
         ]);
+
+        $school->update($fields);
 
         return new SchoolResource($school->fresh());
     }

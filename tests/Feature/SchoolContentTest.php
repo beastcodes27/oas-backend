@@ -152,6 +152,26 @@ class SchoolContentTest extends TestCase
             ->assertJsonPath('data.0.home_features_subtitle', 'From application to admission, we simplify your journey into Minimal School.');
     }
 
+    public function test_saving_content_does_not_wipe_home_features_heading(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        School::factory()->create([
+            'home_features_label' => 'Why Our School',
+            'home_features_title' => 'Everything in one place',
+            'home_features_subtitle' => 'A short subtitle.',
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/school/content', [
+                'combinations' => ['PCM — Physics, Chemistry, Advanced Maths'],
+                'result_links' => [],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.home_features_label', 'Why Our School')
+            ->assertJsonPath('data.home_features_title', 'Everything in one place')
+            ->assertJsonPath('data.home_features_subtitle', 'A short subtitle.');
+    }
+
     public function test_admin_can_update_contact_details(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);
