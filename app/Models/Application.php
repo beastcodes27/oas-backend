@@ -46,4 +46,19 @@ class Application extends Model
     {
         return $this->belongsTo(School::class);
     }
+
+    /**
+     * The status shown to applicants.
+     *
+     * Remains "pending" until the school publishes its selection results,
+     * so internal review decisions are never exposed early.
+     */
+    public function visibleStatusForApplicant(): ApplicationStatus
+    {
+        if ($this->school?->selections_published_at === null) {
+            return ApplicationStatus::Pending;
+        }
+
+        return $this->status->isFinal() ? $this->status : ApplicationStatus::Pending;
+    }
 }

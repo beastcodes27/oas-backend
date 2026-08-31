@@ -37,6 +37,10 @@ class ApplicationResource extends JsonResource
                 'value' => $status->value,
                 'label' => $status->label(),
             ],
+            'applicant_status' => [
+                'value' => $this->visibleStatusForApplicant()->value,
+                'label' => $this->visibleStatusForApplicant()->label(),
+            ],
             'submitted_at' => $this->submitted_at?->toISOString(),
             'decided_at' => $this->decided_at?->toISOString(),
             'decision_notes' => $this->decision_notes,
@@ -53,6 +57,16 @@ class ApplicationResource extends JsonResource
             'school' => new SchoolResource($this->whenLoaded('school')),
             'timeline' => $this->buildTimeline($status),
         ];
+    }
+
+    /**
+     * Build the application progress timeline for a given status.
+     *
+     * @return array<int, array{title: string, text: string, state: string}>
+     */
+    public function timelineFor(ApplicationStatus $status): array
+    {
+        return $this->buildTimeline($status);
     }
 
     /**

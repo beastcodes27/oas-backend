@@ -106,7 +106,7 @@ class AdmissionOfficerTest extends TestCase
 
         $this->getJson('/api/v1/applications/status/'.$application->reference)
             ->assertOk()
-            ->assertJsonPath('data.status.value', 'reviewing')
+            ->assertJsonPath('data.status.value', 'pending')
             ->assertJsonMissingPath('data.status.approved');
     }
 

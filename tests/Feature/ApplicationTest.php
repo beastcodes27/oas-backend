@@ -187,7 +187,7 @@ class ApplicationTest extends TestCase
         $this->getJson('/api/v1/applications/status/'.$application->reference)
             ->assertOk()
             ->assertJsonPath('data.reference', $application->reference)
-            ->assertJsonPath('data.status.value', 'reviewing')
+            ->assertJsonPath('data.status.value', 'pending')
             ->assertJsonStructure([
                 'data' => [
                     'reference',
@@ -199,6 +199,49 @@ class ApplicationTest extends TestCase
                     ],
                 ],
             ]);
+    }
+
+    public function test_tracked_status_stays_pending_until_selections_published(): void
+    {
+        $application = Application::factory()->create([
+            'school_id' => $this->school->id,
+            'status' => ApplicationStatus::Approved,
+        ]);
+
+        $this->getJson('/api/v1/applications/status/'.$application->reference)
+            ->assertOk()
+            ->assertJsonPath('data.status.value', 'pending');
+    }
+
+    public function test_tracked_status_shows_decision_after_selections_published(): void
+    {
+        $this->school->update(['selections_published_at' => now()]);
+
+        $application = Application::factory()->create([
+            'school_id' => $this->school->id,
+            'status' => ApplicationStatus::Selected,
+            'decided_at' => now(),
+        ]);
+
+        $this->getJson('/api/v1/applications/status/'.$application->reference)
+            ->assertOk()
+            ->assertJsonPath('data.status.value', 'selected');
+    }
+
+    public function test_dashboard_exposes_applicant_status_as_pending_until_published(): void
+    {
+        $user = User::factory()->create();
+        Application::factory()->create([
+            'user_id' => $user->id,
+            'school_id' => $this->school->id,
+            'status' => ApplicationStatus::Declined,
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/applications')
+            ->assertOk()
+            ->assertJsonPath('data.0.applicant_status.value', 'pending')
+            ->assertJsonPath('data.0.status.value', 'declined');
     }
 
     public function test_tracking_unknown_reference_returns_404(): void

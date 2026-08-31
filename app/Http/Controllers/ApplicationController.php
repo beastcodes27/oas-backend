@@ -114,9 +114,7 @@ class ApplicationController extends Controller
             ], 404);
         }
 
-        $visibleStatus = $application->status->isDraftDecision()
-            ? ApplicationStatus::Reviewing
-            : $application->status;
+        $visibleStatus = $application->visibleStatusForApplicant();
 
         return response()->json([
             'data' => [
@@ -130,7 +128,7 @@ class ApplicationController extends Controller
                 ],
                 'submitted_at' => $application->submitted_at?->toISOString(),
                 'decided_at' => $application->decided_at?->toISOString(),
-                'timeline' => (new ApplicationResource($application))->resolve()['timeline'],
+                'timeline' => (new ApplicationResource($application))->timelineFor($visibleStatus),
             ],
         ]);
     }
