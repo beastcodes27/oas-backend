@@ -111,6 +111,19 @@ class SchoolContentTest extends TestCase
             ->assertJsonCount(1, 'data.0.result_links');
     }
 
+    public function test_school_resource_defaults_nullable_fields(): void
+    {
+        School::query()->create(['name' => 'Minimal School']);
+
+        $this->getJson('/api/v1/schools')
+            ->assertOk()
+            ->assertJsonPath('data.0.streams', [])
+            ->assertJsonPath('data.0.programs', [])
+            ->assertJsonPath('data.0.combinations', [])
+            ->assertJsonPath('data.0.result_links', [])
+            ->assertJsonPath('data.0.contact', ['phone' => '', 'email' => '', 'address' => '']);
+    }
+
     public function test_admin_can_update_contact_details(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);

@@ -57,6 +57,21 @@ class School extends Model
                 'rating' => 'A',
                 'capacity' => 600,
                 'forms' => [1, 2, 3, 4, 5, 6],
+                'streams' => ['Science', 'Business', 'Humanities'],
+                'combinations' => [
+                    'PCM — Physics, Chemistry, Advanced Mathematics',
+                    'PCB — Physics, Chemistry, Biology',
+                    'HGL — History, Geography, Kiswahili',
+                ],
+                'programs' => [
+                    ['name' => 'O-Level', 'forms' => 'Form 1 – Form 4', 'intake' => 'Form 1', 'description' => ''],
+                    ['name' => 'A-Level', 'forms' => 'Form 5 – Form 6', 'intake' => 'Form 5', 'description' => ''],
+                ],
+                'contact' => [
+                    'phone' => '',
+                    'email' => '',
+                    'address' => '',
+                ],
                 'applications_open' => false,
             ],
         );
