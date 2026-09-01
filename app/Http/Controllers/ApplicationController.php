@@ -38,6 +38,26 @@ class ApplicationController extends Controller
             );
         }
 
+        // A user may apply once per entry level per window. A Form 1 applicant
+        // from a previous intake may apply again for Form 5 in a later window,
+        // but cannot submit a second application for the same level in the
+        // same window.
+        if ($school !== null && $school->window_opens_at !== null && $school->window_closes_at !== null) {
+            $duplicate = $user->applications()
+                ->where('school_id', $school->id)
+                ->where('entry_level', $data['entry_level'])
+                ->whereBetween('submitted_at', [$school->window_opens_at, $school->window_closes_at])
+                ->exists();
+
+            if ($duplicate) {
+                throw new HttpResponseException(
+                    response()->json([
+                        'message' => 'You already have an application for this entry level in the current window.',
+                    ], 409),
+                );
+            }
+        }
+
         $application = DB::transaction(function () use ($data, $user, $school): Application {
             $student = $user->students()->create($data['student']);
 

@@ -74,6 +74,47 @@ class ApplicationTest extends TestCase
             ->assertStatus(401);
     }
 
+    public function test_user_cannot_submit_duplicate_entry_level_in_same_window(): void
+    {
+        $this->school->update([
+            'applications_open' => true,
+            'window_opens_at' => now()->subDay(),
+            'window_closes_at' => now()->addMonth(),
+        ]);
+        $user = User::factory()->create();
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/applications', $this->payload())
+            ->assertStatus(201);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/applications', $this->payload())
+            ->assertStatus(409);
+    }
+
+    public function test_returning_student_can_apply_for_a_new_entry_level_in_a_new_window(): void
+    {
+        $this->school->update([
+            'applications_open' => true,
+            'window_opens_at' => now()->subDay(),
+            'window_closes_at' => now()->addMonth(),
+        ]);
+        $user = User::factory()->create();
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/applications', $this->payload(['entry_level' => 'Form 1']))
+            ->assertStatus(201);
+
+        // Simulate a Form 1 application submitted in a previous intake (2017).
+        Application::where('user_id', $user->id)->update(['submitted_at' => '2017-04-15 10:00:00']);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/applications', $this->payload(['entry_level' => 'Form 5']))
+            ->assertStatus(201);
+
+        $this->assertDatabaseCount('applications', 2);
+    }
+
     public function test_authenticated_user_can_submit_an_application(): void
     {
         $user = User::factory()->create();
