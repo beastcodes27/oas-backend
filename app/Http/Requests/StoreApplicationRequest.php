@@ -35,7 +35,7 @@ class StoreApplicationRequest extends FormRequest
             'student.region' => ['required', 'string', 'max:100'],
             'student.district' => ['required', 'string', 'max:100'],
             'student.ward' => ['required', 'string', 'max:100'],
-            'student.phone' => ['required', 'string', 'max:30'],
+            'student.phone' => ['nullable', 'string', 'max:30'],
             'student.email' => ['nullable', 'string', 'email', 'max:255'],
             'student.previous_school' => ['nullable', 'string', 'max:255'],
             'student.disability' => ['nullable', 'string', 'max:100'],
