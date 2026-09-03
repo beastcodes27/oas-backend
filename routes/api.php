@@ -19,7 +19,7 @@ Route::prefix('v1')->group(function () {
     Route::get('gallery', [GalleryController::class, 'index'])->name('gallery.index');
     Route::get('home-features', [HomeFeatureController::class, 'index'])->name('home-features.index');
     Route::get('applications/status/{reference}', [ApplicationController::class, 'track'])
-        ->middleware('throttle:api')
+        ->middleware('throttle:track')
         ->name('applications.track');
     // Candidates verify their published result before they have an account.
     Route::post('necta/lookup', [NectaController::class, 'lookup'])

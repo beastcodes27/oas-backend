@@ -47,5 +47,12 @@ class AppServiceProvider extends ServiceProvider
             // Protects NECTA's servers from bursts of queued verification jobs.
             return Limit::perMinute(10)->by('necta-scraper');
         });
+
+        // Public application tracking is unauthenticated, so a slow per-IP
+        // limit stops attackers from guessing reference numbers to read
+        // other applicants' statuses.
+        RateLimiter::for('track', function ($request) {
+            return Limit::perMinute(10)->by($request->ip());
+        });
     }
 }
