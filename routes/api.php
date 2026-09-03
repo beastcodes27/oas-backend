@@ -21,6 +21,10 @@ Route::prefix('v1')->group(function () {
     Route::get('applications/status/{reference}', [ApplicationController::class, 'track'])
         ->middleware('throttle:api')
         ->name('applications.track');
+    // Candidates verify their published result before they have an account.
+    Route::post('necta/lookup', [NectaController::class, 'lookup'])
+        ->middleware('throttle:api')
+        ->name('necta.lookup');
 
     // Authentication
     Route::prefix('auth')->group(function () {
@@ -30,6 +34,13 @@ Route::prefix('v1')->group(function () {
         Route::post('login', [AuthController::class, 'login'])
             ->middleware('throttle:auth')
             ->name('auth.login');
+        // Candidate accounts are keyed by the candidate's NECTA index number.
+        Route::post('candidate/register', [AuthController::class, 'candidateRegister'])
+            ->middleware('throttle:auth')
+            ->name('auth.candidate.register');
+        Route::post('candidate/login', [AuthController::class, 'candidateLogin'])
+            ->middleware('throttle:auth')
+            ->name('auth.candidate.login');
         Route::post('logout', [AuthController::class, 'logout'])
             ->middleware('auth:sanctum')
             ->name('auth.logout');
@@ -46,7 +57,6 @@ Route::prefix('v1')->group(function () {
         Route::get('applications', [ApplicationController::class, 'index'])->name('applications.index');
         Route::post('applications', [ApplicationController::class, 'store'])->name('applications.store');
         Route::get('applications/{application}/form', [ApplicationController::class, 'form'])->name('applications.form');
-        Route::post('necta/lookup', [NectaController::class, 'lookup'])->name('necta.lookup');
     });
 
     // Staff endpoints — administrators and admission officers

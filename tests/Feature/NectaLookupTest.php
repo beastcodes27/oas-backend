@@ -13,12 +13,11 @@ class NectaLookupTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_lookup_requires_authentication(): void
+    public function test_lookup_is_available_without_authentication(): void
     {
-        $this->postJson('/api/v1/necta/lookup', [
-            'exam_type' => 'psle',
-            'reg_number' => 'PS0101/0023/2024',
-        ])->assertStatus(401);
+        $this->postJson('/api/v1/necta/lookup', [])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['exam_type', 'reg_number']);
     }
 
     public function test_lookup_returns_a_deterministic_result(): void
