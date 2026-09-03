@@ -15,15 +15,13 @@ class NectaLookupTest extends TestCase
 
     public function test_lookup_is_available_without_authentication(): void
     {
-        $this->postJson('/api/v1/necta/lookup', [])
+        $this->getJson('/api/v1/necta/lookup')
             ->assertStatus(422)
             ->assertJsonValidationErrors(['exam_type', 'reg_number']);
     }
 
     public function test_lookup_returns_a_deterministic_result(): void
     {
-        $user = User::factory()->create();
-
         Http::fake([
             'onlinesys.necta.go.tz/*' => function ($request) {
                 if (str_contains($request->url(), '/index.htm')) {
@@ -40,11 +38,7 @@ class NectaLookupTest extends TestCase
             },
         ]);
 
-        $response = $this->actingAs($user, 'sanctum')
-            ->postJson('/api/v1/necta/lookup', [
-                'exam_type' => 'csee',
-                'reg_number' => 'S0104/0002/2024',
-            ]);
+        $response = $this->getJson('/api/v1/necta/lookup?exam_type=csee&reg_number=S0104%2F0002%2F2024');
 
         $response->assertOk()
             ->assertJsonStructure([
@@ -69,11 +63,7 @@ class NectaLookupTest extends TestCase
             ->assertJsonPath('data.reg_number', 'S0104/0002/2024');
 
         $first = $response->json('data');
-        $second = $this->actingAs($user, 'sanctum')
-            ->postJson('/api/v1/necta/lookup', [
-                'exam_type' => 'csee',
-                'reg_number' => 'S0104/0002/2024',
-            ])
+        $second = $this->getJson('/api/v1/necta/lookup?exam_type=csee&reg_number=S0104%2F0002%2F2024')
             ->json('data');
 
         $this->assertSame($first, $second);
@@ -81,13 +71,7 @@ class NectaLookupTest extends TestCase
 
     public function test_lookup_rejects_an_invalid_exam_type(): void
     {
-        $user = User::factory()->create();
-
-        $this->actingAs($user, 'sanctum')
-            ->postJson('/api/v1/necta/lookup', [
-                'exam_type' => 'university',
-                'reg_number' => 'PS0101/0023/2024',
-            ])
+        $this->getJson('/api/v1/necta/lookup?exam_type=university&reg_number=PS0101%2F0023%2F2024')
             ->assertStatus(422)
             ->assertJsonValidationErrors('exam_type');
     }

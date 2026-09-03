@@ -22,7 +22,8 @@ Route::prefix('v1')->group(function () {
         ->middleware('throttle:track')
         ->name('applications.track');
     // Candidates verify their published result before they have an account.
-    Route::post('necta/lookup', [NectaController::class, 'lookup'])
+    // A public GET (simple cross-origin request) avoids CORS pre-flights.
+    Route::get('necta/lookup', [NectaController::class, 'lookup'])
         ->middleware('throttle:api')
         ->name('necta.lookup');
 
