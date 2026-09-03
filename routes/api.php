@@ -42,25 +42,25 @@ Route::prefix('v1')->group(function () {
             ->middleware('throttle:auth')
             ->name('auth.candidate.login');
         Route::post('logout', [AuthController::class, 'logout'])
-            ->middleware('auth:sanctum')
+            ->middleware(['auth:sanctum', 'oas-auth'])
             ->name('auth.logout');
         Route::get('me', [AuthController::class, 'me'])
             ->middleware('auth:sanctum')
             ->name('auth.me');
         Route::patch('profile', [AuthController::class, 'updateProfile'])
-            ->middleware('auth:sanctum')
+            ->middleware(['auth:sanctum', 'oas-auth'])
             ->name('auth.profile');
     });
 
     // Authenticated applicant endpoints
-    Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
+    Route::middleware(['auth:sanctum', 'oas-auth', 'throttle:api'])->group(function () {
         Route::get('applications', [ApplicationController::class, 'index'])->name('applications.index');
         Route::post('applications', [ApplicationController::class, 'store'])->name('applications.store');
         Route::get('applications/{application}/form', [ApplicationController::class, 'form'])->name('applications.form');
     });
 
     // Staff endpoints — administrators and admission officers
-    Route::prefix('staff')->middleware(['auth:sanctum', 'staff', 'throttle:api'])->group(function () {
+    Route::prefix('staff')->middleware(['auth:sanctum', 'oas-auth', 'staff', 'throttle:api'])->group(function () {
         Route::get('applications', [StaffApplicationController::class, 'index'])->name('staff.applications.index');
         Route::patch('applications/{application}/status', [StaffApplicationController::class, 'updateStatus'])->name('staff.applications.status');
         Route::get('applications/export', [ApplicationExportController::class, 'download'])->name('staff.applications.export');
@@ -68,7 +68,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // Administrator endpoints
-    Route::prefix('admin')->middleware(['auth:sanctum', 'admin', 'throttle:api'])->group(function () {
+    Route::prefix('admin')->middleware(['auth:sanctum', 'oas-auth', 'admin', 'throttle:api'])->group(function () {
         Route::post('upload', [MediaController::class, 'store'])->name('admin.upload');
         Route::patch('selections/publish', [AdminApplicationController::class, 'publishSelections'])->name('admin.selections.publish');
         Route::patch('settings/window', [AdminApplicationController::class, 'updateWindow'])->name('admin.settings.window');

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Middleware\AuthenticateCookieToken;
 use App\Http\Requests\CandidateLoginRequest;
 use App\Http\Requests\CandidateRegisterRequest;
 use App\Http\Requests\LoginRequest;
@@ -13,6 +14,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
+use Symfony\Component\HttpFoundation\Cookie;
 
 class AuthController extends Controller
 {
@@ -20,11 +23,7 @@ class AuthController extends Controller
     {
         $user = User::create($request->validated());
 
-        return response()->json([
-            'message' => 'Account created successfully.',
-            'token' => $user->createToken('auth-token')->plainTextToken,
-            'user' => new UserResource($user),
-        ], 201);
+        return $this->respondAuthenticated($request, $user, 'Account created successfully.', 201);
     }
 
     public function login(LoginRequest $request): JsonResponse
@@ -37,11 +36,7 @@ class AuthController extends Controller
             ]);
         }
 
-        return response()->json([
-            'message' => 'Logged in successfully.',
-            'token' => $user->createToken('auth-token')->plainTextToken,
-            'user' => new UserResource($user),
-        ]);
+        return $this->respondAuthenticated($request, $user, 'Logged in successfully.');
     }
 
     /**
@@ -54,11 +49,7 @@ class AuthController extends Controller
             'password' => $request->password,
         ]);
 
-        return response()->json([
-            'message' => 'Account created successfully.',
-            'token' => $user->createToken('auth-token')->plainTextToken,
-            'user' => new UserResource($user),
-        ], 201);
+        return $this->respondAuthenticated($request, $user, 'Account created successfully.', 201);
     }
 
     /**
@@ -74,18 +65,19 @@ class AuthController extends Controller
             ]);
         }
 
-        return response()->json([
-            'message' => 'Logged in successfully.',
-            'token' => $user->createToken('auth-token')->plainTextToken,
-            'user' => new UserResource($user),
-        ]);
+        return $this->respondAuthenticated($request, $user, 'Logged in successfully.');
     }
 
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        if ($request->user() !== null) {
+            $request->user()->currentAccessToken()?->delete();
+        }
 
-        return response()->json(['message' => 'Logged out successfully.']);
+        $response = response()->json(['message' => 'Logged out successfully.']);
+        $response->headers->setCookie($this->authCookie('', expire: true));
+
+        return $response;
     }
 
     public function me(Request $request): UserResource
@@ -127,5 +119,61 @@ class AuthController extends Controller
         }
 
         return new UserResource($user->fresh());
+    }
+
+    /**
+     * Build a successful auth response. For requests coming from the SPA the
+     * token is only written to an httpOnly cookie (out of reach of scripts);
+     * external clients still receive the plaintext token in the body.
+     */
+    private function respondAuthenticated(Request $request, User $user, string $message, int $status = 200): JsonResponse
+    {
+        $token = $user->createToken('auth-token')->plainTextToken;
+
+        $response = response()->json([
+            'message' => $message,
+            'user' => new UserResource($user),
+        ], $status);
+
+        if ($this->isFrontendRequest($request)) {
+            $response->headers->setCookie($this->authCookie($token));
+        } else {
+            $payload = $response->getData(true);
+            $payload['token'] = $token;
+            $response->setData($payload);
+        }
+
+        return $response;
+    }
+
+    /**
+     * Determine whether the request originates from the first-party SPA.
+     */
+    private function isFrontendRequest(Request $request): bool
+    {
+        return EnsureFrontendRequestsAreStateful::fromFrontend($request);
+    }
+
+    /**
+     * Build the httpOnly authentication cookie.
+     */
+    private function authCookie(string $token, bool $expire = false): Cookie
+    {
+        $session = config('session');
+        $minutes = $expire
+            ? -2628000 // one month in the past — expires the cookie immediately
+            : (int) config('sanctum.expiration', 10080);
+
+        return Cookie::create(
+            AuthenticateCookieToken::COOKIE_NAME,
+            $expire ? '' : $token,
+            $minutes,
+            $session['path'] ?? '/',
+            $session['domain'],
+            (bool) ($session['secure'] ?? false),
+            true, // httpOnly — JavaScript can never read the token
+            false,
+            $session['same_site'] ?: 'lax',
+        );
     }
 }
