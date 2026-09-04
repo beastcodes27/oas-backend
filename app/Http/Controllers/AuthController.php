@@ -7,6 +7,7 @@ use App\Http\Requests\CandidateLoginRequest;
 use App\Http\Requests\CandidateRegisterRequest;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
+use App\Http\Requests\SaveIntakeRequest;
 use App\Http\Requests\UpdateProfileRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
@@ -83,6 +84,22 @@ class AuthController extends Controller
     public function me(Request $request): UserResource
     {
         return new UserResource($request->user());
+    }
+
+    /**
+     * Save the applicant's intake early: the entry level chosen at sign-up and
+     * the confirmed NECTA result captured right after account creation.
+     */
+    public function saveIntake(SaveIntakeRequest $request): UserResource
+    {
+        $user = $request->user();
+
+        $user->update([
+            ...$request->validated(),
+            'exam_confirmed_at' => $request->boolean('exam_confirmed') ? now() : $user->exam_confirmed_at,
+        ]);
+
+        return new UserResource($user->fresh());
     }
 
     /**

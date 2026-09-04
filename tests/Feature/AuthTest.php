@@ -164,4 +164,28 @@ class AuthTest extends TestCase
 
         $this->assertTrue(Hash::check('CurrentPass1', $user->fresh()->password));
     }
+
+    public function test_user_can_save_their_intake_early(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user, 'sanctum')
+            ->patchJson('/api/v1/auth/intake', [
+                'entry_level' => 'Form 1',
+                'exam_type' => 'psle',
+                'exam_reg_number' => 'P0101/0001/2024',
+                'exam_year' => 2024,
+                'exam_confirmed' => true,
+                'exam_result' => ['division' => 'A', 'points' => 7],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.intake.entry_level', 'Form 1')
+            ->assertJsonPath('data.intake.exam_reg_number', 'P0101/0001/2024')
+            ->assertJsonPath('data.intake.exam_confirmed', true);
+
+        $fresh = $user->fresh();
+        $this->assertSame('Form 1', $fresh->entry_level);
+        $this->assertTrue($fresh->exam_confirmed);
+        $this->assertNotNull($fresh->exam_confirmed_at);
+    }
 }

@@ -22,6 +22,15 @@ class UserResource extends JsonResource
             'phone' => $this->phone,
             'is_admin' => $this->is_admin,
             'is_admissions' => $this->is_admissions,
+            'intake' => [
+                'entry_level' => $this->entry_level,
+                'exam_type' => $this->exam_type,
+                'exam_reg_number' => $this->exam_reg_number,
+                'exam_year' => $this->exam_year,
+                'exam_confirmed' => $this->exam_confirmed,
+                'exam_confirmed_at' => $this->exam_confirmed_at?->toISOString(),
+                'exam_result' => $this->exam_result,
+            ],
             'created_at' => $this->created_at?->toISOString(),
         ];
     }

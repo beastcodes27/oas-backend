@@ -51,6 +51,9 @@ Route::prefix('v1')->group(function () {
         Route::patch('profile', [AuthController::class, 'updateProfile'])
             ->middleware(['auth:sanctum', 'oas-auth'])
             ->name('auth.profile');
+        Route::patch('intake', [AuthController::class, 'saveIntake'])
+            ->middleware(['auth:sanctum', 'oas-auth'])
+            ->name('auth.intake');
     });
 
     // Authenticated applicant endpoints
